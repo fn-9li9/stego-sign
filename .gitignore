@@ -1,2 +1,5 @@
 # -- minio license
 minio.license
+
+# -- enviroment variables
+.env

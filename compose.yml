@@ -1,5 +1,14 @@
 services:
-  minio:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-stegosign}
+      POSTGRES_USER: ${POSTGRES_USER:-sre}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sre}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+  files:
     image: quay.io/minio/aistor/minio:latest
     container_name: aistor-server
     restart: unless-stopped
@@ -8,9 +17,9 @@ services:
       - "${MINIO_CONSOLE_PORT:-9001}:9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-Sutrimex2025}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-fnstellasre}
     volumes:
-      - minio-data:/mnt/data
+      - minio_data:/mnt/data
       - ./minio.license:/minio.license:ro
     command: server /mnt/data --console-address :${MINIO_CONSOLE_PORT:-9001} --license /minio.license
     healthcheck:
@@ -20,4 +29,5 @@ services:
       retries: 5
 
 volumes:
-  minio-data:
+  minio_data:
+  pg_data:
