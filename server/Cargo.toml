@@ -1,0 +1,10 @@
+[package]
+name = "stego-server"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = ["server"]
+resolver = "2"
+
+[dependencies]
