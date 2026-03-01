@@ -1,42 +1,62 @@
 mod config;
+mod handlers;
+mod models;
+mod repositories;
 mod routes;
+mod services;
 
+use aws_sdk_s3::Client as S3Client;
 use axum::Router;
+use sea_orm::DatabaseConnection;
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
 use config::{Env, db, logger};
+use services::storage;
 
-// -- shared application state injected into every handler
+// -- shared state available to every handler
 #[derive(Clone)]
 pub struct AppState {
     pub env: Arc<Env>,
-    pub db: Arc<sea_orm::DatabaseConnection>,
+    pub db: Arc<DatabaseConnection>,
+    pub storage: Arc<S3Client>,
+    pub signing_key: Arc<String>,
+    pub verify_key: Arc<String>,
 }
 
 #[tokio::main]
 async fn main() {
-    // -- init logger first so every subsequent log is captured
     logger::init();
 
-    // -- load env vars
     let env = Env::load();
     info!(host = %env.server_host, port = %env.server_port, "starting stego-server");
 
-    // -- connect to database
-    let db_conn = db::connect(&env)
+    // -- database
+    let db_conn = db::connect(&env).await.expect("database connection failed");
+
+    // -- minio client + ensure buckets exist
+    let s3_client = storage::build_client(&env).await;
+    // -- self-healing: buckets se crean automáticamente al arrancar
+    storage::ensure_buckets(&s3_client)
         .await
-        .expect("failed to establish database connection");
+        .expect("failed to ensure minio buckets — check minio connection");
+
+    // -- signing keys (in prod: load from vault or env)
+    // -- for now: hardcoded dev keys, replace with real key management
+    let signing_key = Arc::new(env.signing_key.clone());
+    let verify_key = Arc::new(env.verify_key.clone());
 
     let state = AppState {
         env: Arc::new(env.clone()),
         db: Arc::new(db_conn),
+        storage: Arc::new(s3_client),
+        signing_key,
+        verify_key,
     };
 
-    // -- build router with trace middleware (logs every request/response)
     let app = Router::new()
-        .merge(routes::health::router())
+        .merge(routes::v1::router())
         .with_state(state)
         .layer(
             TraceLayer::new_for_http().make_span_with(|req: &axum::http::Request<_>| {
