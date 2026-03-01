@@ -36,3 +36,9 @@ anyhow = "1"
 # uuid + fechas
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+aws-sdk-s3 = "1.124.0"
+aws-config = "1.8.14"
+ring = "0.17.14"
+base64 = "0.22.1"
+hex = "0.4.3"
+bytes = "1.11.1"
