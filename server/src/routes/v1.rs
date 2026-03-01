@@ -19,6 +19,10 @@ pub fn router() -> Router<AppState> {
             "/api/v1/documents/{id}/audit",
             get(documents::audit_handler),
         )
-        // -- dev only, remove in production
+        .route(
+            "/api/v1/documents/{id}/download",
+            get(documents::download_handler),
+        )
+        // -- dev only
         .route("/api/v1/admin/keygen", get(admin::keygen_handler))
 }
