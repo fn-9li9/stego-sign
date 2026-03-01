@@ -1,37 +1,69 @@
-/* -- tailwind v4 theme tokens */
+/* -- import google fonts */
+@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap");
+
+
 @theme {
-	--color-primary: #6366f1;
-	--color-success: #22c55e;
-	--color-danger: #ef4444;
-	--color-warning: #f59e0b;
-	--color-dark: #0f172a;
+	--font-body: "Inter", sans-serif;
+	--font-display: "Poppins", sans-serif;
+
+	--color-primary-50: #fef2f2;
+	--color-primary-400: #e83d61;
+	--color-primary-500: #d20f39;
+	--color-primary-600: #b00d30;
+	--color-primary-700: #8f0a27;
+	--color-accent: #f59e0b;
+	--color-accent-light: #fbbf24;
+	--color-accent-dark: #d97706;
+	--color-navy: #1e293b;
+	--color-background-light: #ffffff;
 }
 
-/* -- global base */
-*,
-*::before,
-*::after {
-	box-sizing: border-box;
+/* -- base */
+html {
+	scroll-behavior: smooth;
 }
 
 body {
-	background-color: #0f172a;
-	color: #f1f5f9;
-	font-family: ui-sans-serif, system-ui, sans-serif;
-	min-height: 100vh;
+	font-family: var(--font-body);
+	color: #374151;
+	background-color: #ffffff;
 	-webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-family: var(--font-display);
+	font-weight: 700;
 }
 
 /* -- scrollbar */
 ::-webkit-scrollbar {
-	width: 6px;
+	width: 10px;
 }
 
 ::-webkit-scrollbar-track {
-	background: #0f172a;
+	background: #f1f5f9;
 }
 
 ::-webkit-scrollbar-thumb {
-	background: #475569;
-	border-radius: 9999px;
+	background: linear-gradient(to bottom, #d20f39, #f59e0b);
+	border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: linear-gradient(to bottom, #b00d30, #d97706);
+}
+
+/* -- noise texture */
+.noise-bg::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+	opacity: 0.03;
+	pointer-events: none;
 }

@@ -18,7 +18,8 @@ pub fn shell(options: leptos::config::LeptosOptions) -> impl IntoView {
                 <AutoReload options=options.clone()/>
                 <HydrationScripts options=options.clone()/>
                 <MetaTags/>
-                <script src="https://cdn.tailwindcss.com"></script>
+                <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+                // -- css compilado por cargo-leptos desde style/main.css
                 <link rel="stylesheet" href="/pkg/stego-app.css"/>
             </head>
             <body>
