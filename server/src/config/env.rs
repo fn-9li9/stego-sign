@@ -46,6 +46,18 @@ impl Env {
             )
         });
 
+        let signing_key = var("SIGNING_KEY", "");
+        let verify_key = var("VERIFY_KEY", "");
+
+        // -- warn early if signing keys are missing
+        if signing_key.is_empty() || verify_key.is_empty() {
+            tracing::warn!(
+                "SIGNING_KEY or VERIFY_KEY is empty — \
+                call GET /api/v1/admin/keygen to generate them, \
+                then add to .env and restart"
+            );
+        }
+
         Self {
             database_url,
             postgres_host,
@@ -63,8 +75,8 @@ impl Env {
             minio_root_user: var("MINIO_ROOT_USER", "admin"),
             minio_root_password: var("MINIO_ROOT_PASSWORD", "fn-stella-sre"),
 
-            signing_key: var("SIGNING_KEY", ""),
-            verify_key: var("VERIFY_KEY", ""),
+            signing_key,
+            verify_key,
         }
     }
 }
