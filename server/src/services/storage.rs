@@ -37,25 +37,37 @@ pub async fn build_client(env: &Env) -> Client {
     Client::from_conf(s3_config)
 }
 
-// -- ensures all required buckets exist, creates them if missing
-// -- self-healing: runs on every server startup
-pub async fn ensure_buckets(client: &Client) -> anyhow::Result<()> {
+// -- agrega este parámetro a ensure_buckets
+pub async fn ensure_buckets(
+    client: &Client,
+    db: &sea_orm::DatabaseConnection,
+) -> anyhow::Result<()> {
+    use sea_orm::ConnectionTrait;
+
     for bucket in [BUCKET_UPLOADS, BUCKET_SIGNATURES, BUCKET_CORRUPTED] {
         match client.head_bucket().bucket(bucket).send().await {
             Ok(_) => {
                 info!(bucket = %bucket, "bucket already exists");
             }
             Err(_) => {
-                // -- bucket does not exist, create it
-                match client.create_bucket().bucket(bucket).send().await {
-                    Ok(_) => info!(bucket = %bucket, "bucket created successfully"),
-                    Err(e) => {
-                        warn!(bucket = %bucket, error = %e, "failed to create bucket");
-                        return Err(anyhow::anyhow!("failed to create bucket {}: {}", bucket, e));
-                    }
-                }
+                client.create_bucket().bucket(bucket).send().await?;
+                info!(bucket = %bucket, "bucket created successfully");
             }
         }
+
+        // -- register in files.buckets if not already there
+        db.execute(sea_orm::Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            INSERT INTO files.buckets (name, region)
+            VALUES ($1, 'us-east-1')
+            ON CONFLICT (name) DO NOTHING
+            "#,
+            [bucket.into()],
+        ))
+        .await?;
+
+        info!(bucket = %bucket, "bucket registered in database");
     }
 
     info!("all buckets verified and ready");

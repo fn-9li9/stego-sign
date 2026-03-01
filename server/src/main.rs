@@ -12,7 +12,7 @@ use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
-use config::{Env, db, logger};
+use config::{Env, cors, db, logger};
 use services::storage;
 
 // -- shared state available to every handler
@@ -38,9 +38,9 @@ async fn main() {
     // -- minio client + ensure buckets exist
     let s3_client = storage::build_client(&env).await;
     // -- self-healing: buckets se crean automáticamente al arrancar
-    storage::ensure_buckets(&s3_client)
+    storage::ensure_buckets(&s3_client, &db_conn)
         .await
-        .expect("failed to ensure minio buckets — check minio connection");
+        .expect("failed to ensure minio buckets");
 
     // -- signing keys (in prod: load from vault or env)
     // -- for now: hardcoded dev keys, replace with real key management
@@ -58,6 +58,7 @@ async fn main() {
     let app = Router::new()
         .merge(routes::v1::router())
         .with_state(state)
+        .layer(cors::layer())
         .layer(
             TraceLayer::new_for_http().make_span_with(|req: &axum::http::Request<_>| {
                 tracing::info_span!(
