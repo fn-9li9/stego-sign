@@ -4,7 +4,7 @@ use aws_sdk_s3::{
     config::{Credentials, Region},
 };
 use bytes::Bytes;
-use tracing::{info, warn};
+use tracing::info;
 
 use crate::config::Env;
 
