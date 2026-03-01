@@ -3,6 +3,7 @@ use axum::{
     extract::{Multipart, State},
     response::IntoResponse,
 };
+use sea_orm::ConnectionTrait;
 use tracing::{error, info};
 use uuid::Uuid;
 
@@ -23,7 +24,6 @@ pub async fn sign_handler(
     let mut filename = String::from("unknown");
     let mut author = String::from("anonymous");
 
-    // -- extract multipart fields
     while let Ok(Some(field)) = multipart.next_field().await {
         match field.name() {
             Some("file") => {
@@ -67,6 +67,9 @@ pub async fn sign_handler(
             }
         };
 
+    // -- save size before bytes is moved into upload
+    let file_size = bytes.len() as i64;
+
     // -- 4. upload original to uploads bucket
     let upload_key = format!("{}/{}", document_id, filename);
     if let Err(e) = storage::upload(
@@ -97,8 +100,36 @@ pub async fn sign_handler(
         return Json(ApiResponse::<()>::err("storage upload failed")).into_response();
     }
 
-    // -- 6. register object in files.objects and document in app.documents
-    let object_id = Uuid::new_v4(); // -- in full impl: insert into files.objects first
+    // -- 6. register object in files.objects
+    let object_id = Uuid::new_v4();
+    if let Err(e) = state
+        .db
+        .execute(sea_orm::Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+        INSERT INTO files.objects
+            (id, bucket_id, object_key, filename, content_type, size_bytes)
+        VALUES (
+            $1,
+            (SELECT id FROM files.buckets WHERE name = $2),
+            $3, $4, 'application/octet-stream', $5
+        )
+        "#,
+            [
+                object_id.into(),
+                storage::BUCKET_UPLOADS.into(),
+                upload_key.clone().into(),
+                filename.clone().into(),
+                file_size.into(),
+            ],
+        ))
+        .await
+    {
+        error!(error = %e, "failed to register object in files.objects");
+        return Json(ApiResponse::<()>::err("database error")).into_response();
+    }
+
+    // -- 7. register document in app.documents
     let doc_id = match doc_repo::create(
         &state.db,
         CreateDocument {
