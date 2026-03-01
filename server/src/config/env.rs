@@ -19,6 +19,10 @@ pub struct Env {
     pub minio_endpoint: String,
     pub minio_root_user: String,
     pub minio_root_password: String,
+
+    // -- en el struct Env
+    pub signing_key: String, // -- ed25519 private key pkcs8 base64
+    pub verify_key: String,  // -- ed25519 public key raw base64
 }
 
 impl Env {
@@ -58,6 +62,9 @@ impl Env {
             minio_endpoint: var("MINIO_ENDPOINT", "http://localhost:9002"),
             minio_root_user: var("MINIO_ROOT_USER", "admin"),
             minio_root_password: var("MINIO_ROOT_PASSWORD", "fn-stella-sre"),
+
+            signing_key: var("SIGNING_KEY", ""),
+            verify_key: var("VERIFY_KEY", ""),
         }
     }
 }
