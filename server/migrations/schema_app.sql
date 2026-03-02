@@ -1,6 +1,5 @@
 CREATE SCHEMA IF NOT EXISTS app;
 
--- ENUM (NO usar IF NOT EXISTS aquí)
 CREATE TYPE app.document_status AS ENUM ('VALID', 'TAMPERED', 'UNREGISTERED', 'INVALID');
 
 CREATE TABLE IF NOT EXISTS app.documents (
@@ -26,11 +25,11 @@ CREATE INDEX IF NOT EXISTS idx_documents_status ON app.documents (status);
 CREATE TABLE IF NOT EXISTS app.audit_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
     document_id UUID REFERENCES app.documents (id) ON DELETE SET NULL,
+    action TEXT NOT NULL DEFAULT 'VERIFY',
     checked_at TIMESTAMPTZ NOT NULL DEFAULT now (),
     result app.document_status NOT NULL,
     checked_hash TEXT,
-    details JSONB NOT NULL DEFAULT '{}',
-    action TEXT NOT NULL DEFAULT 'VERIFY'
+    details JSONB NOT NULL DEFAULT '{}'
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_document_id ON app.audit_log (document_id);
