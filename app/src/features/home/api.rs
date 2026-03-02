@@ -2,35 +2,39 @@ use crate::shared::config::api_base_url;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct Document {
-    pub status: String,
+pub struct StatsData {
+    pub documents_signed: u64,
+    pub verifications: u64,
+    pub tampered: u64,
+    pub storage_vaults: u64,
+    pub objects: u64,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ApiResponse<T> {
-    pub success: bool,
-    pub data: Option<T>,
+struct StatsResponse {
+    pub data: StatsData,
 }
 
 #[derive(Debug, Clone, Default)]
 pub struct Stats {
-    pub total: usize,
-    pub tampered: usize,
+    pub documents_signed: u64,
+    pub verifications: u64,
+    pub tampered: u64,
+    pub objects: u64,
 }
 
 pub async fn fetch_stats() -> Result<Stats, String> {
-    let resp = gloo_net::http::Request::get(&format!("{}/api/v1/documents", api_base_url()))
+    let resp = gloo_net::http::Request::get(&format!("{}/api/v1/stats", api_base_url()))
         .send()
         .await
         .map_err(|e| e.to_string())?;
 
-    let parsed: ApiResponse<Vec<Document>> = resp.json().await.map_err(|e| e.to_string())?;
-
-    let docs = parsed.data.unwrap_or_default();
-    let tampered = docs.iter().filter(|d| d.status == "TAMPERED").count();
+    let parsed: StatsResponse = resp.json().await.map_err(|e| e.to_string())?;
 
     Ok(Stats {
-        total: docs.len(),
-        tampered,
+        documents_signed: parsed.data.documents_signed,
+        verifications: parsed.data.verifications,
+        tampered: parsed.data.tampered,
+        objects: parsed.data.objects,
     })
 }

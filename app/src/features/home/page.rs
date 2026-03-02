@@ -1,20 +1,22 @@
 use super::api::Stats;
 use leptos::prelude::*;
 use leptos_router::components::A;
-use lucide_leptos::{Activity, ArrowRight, Database, FileCheck, FileLock, FileSearch, ShieldCheck};
+use lucide_leptos::{
+    Activity, ArrowRight, FileCheck, FileLock, FileSearch, HardDrive, ShieldCheck,
+};
 
 #[component]
 pub fn HomePage() -> impl IntoView {
     let stats = RwSignal::new(Stats::default());
 
-    // -- solo en el browser, nunca en SSR
     #[cfg(feature = "hydrate")]
     {
         use super::api::fetch_stats;
         use wasm_bindgen_futures::spawn_local;
         spawn_local(async move {
-            if let Ok(s) = fetch_stats().await {
-                stats.set(s);
+            match fetch_stats().await {
+                Ok(s) => stats.set(s),
+                Err(e) => tracing::warn!(error = %e, "failed to fetch stats"),
             }
         });
     }
@@ -44,14 +46,20 @@ pub fn HomePage() -> impl IntoView {
                 </p>
 
                 <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                    <A href="/sign" attr:class="group inline-flex items-center gap-3 px-8 py-4 text-base font-semibold text-white bg-gradient-to-r from-primary-500 to-primary-600 rounded-full hover:from-primary-600 hover:to-primary-700 transform hover:scale-105 hover:shadow-xl hover:shadow-primary-500/30 transition-all duration-300 shadow-lg">
+                    <A
+                        href="/sign"
+                        attr:class="group inline-flex items-center gap-3 px-8 py-4 text-base font-semibold text-white bg-gradient-to-r from-primary-500 to-primary-600 rounded-full hover:from-primary-600 hover:to-primary-700 transform hover:scale-105 hover:shadow-xl hover:shadow-primary-500/30 transition-all duration-300 shadow-lg"
+                    >
                         <FileLock size=20 color="#ffffff" />
                         "Sign a Document"
                         <span class="transform group-hover:translate-x-1 transition-transform duration-300">
                             <ArrowRight size=18 color="#ffffff" />
                         </span>
                     </A>
-                    <A href="/verify" attr:class="group inline-flex items-center gap-3 px-8 py-4 text-base font-semibold text-primary-600 bg-white border-2 border-primary-500 rounded-full hover:bg-primary-50 hover:border-primary-600 hover:shadow-lg transform hover:scale-105 transition-all duration-300">
+                    <A
+                        href="/verify"
+                        attr:class="group inline-flex items-center gap-3 px-8 py-4 text-base font-semibold text-primary-600 bg-white border-2 border-primary-500 rounded-full hover:bg-primary-50 hover:border-primary-600 hover:shadow-lg transform hover:scale-105 transition-all duration-300"
+                    >
                         <FileSearch size=20 color="#d20f39" />
                         "Verify Integrity"
                         <span class="transform group-hover:translate-x-1 transition-transform duration-300">
@@ -108,36 +116,47 @@ pub fn HomePage() -> impl IntoView {
             <section class="py-16 px-4 bg-white border-t border-gray-100">
                 <div class="max-w-6xl mx-auto">
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+
                         <StatusStat
                             label="Documents Signed"
                             value=Signal::derive(move || {
-                                let t = stats.get().total;
-                                if t == 0 { "—".to_string() } else { t.to_string() }
+                                let v = stats.get().documents_signed;
+                                if v == 0 { "—".to_string() } else { v.to_string() }
                             })
                         >
                             <FileLock size=24 color="#d20f39" />
                         </StatusStat>
+
                         <StatusStat
                             label="Verifications"
-                            value=Signal::derive(move || "—".to_string())
+                            value=Signal::derive(move || {
+                                let v = stats.get().verifications;
+                                if v == 0 { "—".to_string() } else { v.to_string() }
+                            })
                         >
                             <ShieldCheck size=24 color="#d20f39" />
                         </StatusStat>
+
                         <StatusStat
                             label="Tampered Detected"
                             value=Signal::derive(move || {
-                                let t = stats.get().tampered;
-                                if t == 0 { "—".to_string() } else { t.to_string() }
+                                let v = stats.get().tampered;
+                                if v == 0 { "—".to_string() } else { v.to_string() }
                             })
                         >
                             <Activity size=24 color="#f59e0b" />
                         </StatusStat>
+
                         <StatusStat
-                            label="Storage Vaults"
-                            value=Signal::derive(move || "3".to_string())
+                            label="Objects in Storage"
+                            value=Signal::derive(move || {
+                                let v = stats.get().objects;
+                                if v == 0 { "—".to_string() } else { v.to_string() }
+                            })
                         >
-                            <Database size=24 color="#1e293b" />
+                            <HardDrive size=24 color="#1e293b" />
                         </StatusStat>
+
                     </div>
                 </div>
             </section>
