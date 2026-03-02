@@ -4,14 +4,41 @@ use lucide_leptos::{
     CircleAlert, CircleCheck, CircleQuestionMark, CircleX, Hash, KeyRound, ShieldCheck,
 };
 
+fn infer_checks(data: &VerifyData) -> (Option<bool>, Option<bool>, Option<bool>) {
+    match data.status.as_str() {
+        "VALID" => (
+            Some(data.hash_match.unwrap_or(true)),
+            Some(data.signature_valid.unwrap_or(true)),
+            Some(data.registered.unwrap_or(true)),
+        ),
+        "TAMPERED" => (
+            Some(data.hash_match.unwrap_or(false)),
+            Some(data.signature_valid.unwrap_or(false)),
+            data.registered,
+        ),
+        "UNREGISTERED" => (
+            Some(data.hash_match.unwrap_or(true)),
+            Some(data.signature_valid.unwrap_or(true)),
+            Some(data.registered.unwrap_or(false)),
+        ),
+        _ => (Some(false), Some(false), Some(false)),
+    }
+}
+
 #[component]
 pub fn VerifyResultCard(data: VerifyData) -> impl IntoView {
-    let status = data.status.clone();
+    let (hash_match, signature_valid, registered) = infer_checks(&data);
+
+    // -- signed_at como string legible
+    let signed_at_str = data.signed_at.as_ref().map(|v| match v {
+        serde_json::Value::String(s) => s.clone(),
+        other => other.to_string(),
+    });
 
     view! {
-        <div class=move || format!(
+        <div class=format!(
             "flex flex-col gap-6 p-6 rounded-2xl shadow-sm border {}",
-            match status.as_str() {
+            match data.status.as_str() {
                 "VALID"        => "bg-white border-green-200",
                 "TAMPERED"     => "bg-white border-red-200",
                 "UNREGISTERED" => "bg-white border-yellow-200",
@@ -23,51 +50,45 @@ pub fn VerifyResultCard(data: VerifyData) -> impl IntoView {
 
             // -- forensic checks
             <ForensicChecks
-                hash_match=data.hash_match
-                signature_valid=data.signature_valid
-                registered=data.registered
+                hash_match=hash_match
+                signature_valid=signature_valid
+                registered=registered
             />
 
-            // -- metadata (solo si hay datos)
-            {if data.document_id.is_some() || data.author.is_some() {
-                view! {
-                    <div class="flex flex-col gap-3">
-                        {data.filename.clone().map(|v| view! {
-                            <MetaRow icon_color="#7287fd" label="Filename" value=v />
-                        })}
-                        {data.author.clone().map(|v| view! {
-                            <MetaRow icon_color="#7287fd" label="Author" value=v />
-                        })}
-                        {data.document_id.clone().map(|v| view! {
-                            <MetaRow icon_color="#7287fd" label="Document ID" value=v />
-                        })}
-                        {data.signed_at.clone().map(|v| view! {
-                            <MetaRow icon_color="#7287fd" label="Signed At" value=v />
-                        })}
-                        {data.hash.clone().map(|v| view! {
-                            <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
-                                <div class="mt-0.5 shrink-0">
-                                    <Hash size=16 color="#9ca3af" />
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <p class="text-xs text-gray-400 mb-1">"SHA-256 Hash"</p>
-                                    <p class="text-xs font-mono text-gray-600 break-all">{v}</p>
-                                </div>
-                            </div>
-                        })}
+            // -- metadata
+            <div class="flex flex-col gap-3">
+                {data.filename.clone().map(|v| view! {
+                    <MetaRow icon_color="#7287fd" label="Filename" value=v />
+                })}
+                {data.author.clone().map(|v| view! {
+                    <MetaRow icon_color="#7287fd" label="Author" value=v />
+                })}
+                {data.document_id.clone().map(|v| view! {
+                    <MetaRow icon_color="#7287fd" label="Document ID" value=v />
+                })}
+                {signed_at_str.map(|v| view! {
+                    <MetaRow icon_color="#7287fd" label="Signed At" value=v />
+                })}
+                {data.hash.clone().map(|v| view! {
+                    <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
+                        <div class="mt-0.5 shrink-0">
+                            <Hash size=16 color="#9ca3af" />
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="text-xs text-gray-400 mb-1">"SHA-256 Hash"</p>
+                            <p class="text-xs font-mono text-gray-600 break-all">{v}</p>
+                        </div>
                     </div>
-                }.into_any()
-            } else {
-                view! { <div></div> }.into_any()
-            }}
+                })}
+            </div>
         </div>
     }
 }
 
-// -- status badge + icon header
 #[component]
 fn StatusHeader(status: String) -> impl IntoView {
-    let (icon, bg, border, text, description) = match status.as_str() {
+    let label = status.clone();
+    let (icon, bg, border, text_class, description) = match status.as_str() {
         "VALID" => (
             view! { <CircleCheck size=28 color="#16a34a" /> }.into_any(),
             "bg-green-50",
@@ -99,17 +120,21 @@ fn StatusHeader(status: String) -> impl IntoView {
     };
 
     view! {
-        <div class=format!("flex items-center gap-4 p-4 {} border {} rounded-xl", bg, border)>
+        <div class=format!(
+            "flex items-center gap-4 p-4 {} border {} rounded-xl",
+            bg, border
+        )>
             {icon}
             <div>
-                <p class=format!("font-display font-bold text-lg {}", text)>{status}</p>
+                <p class=format!("font-display font-bold text-lg {}", text_class)>
+                    {label}
+                </p>
                 <p class="text-xs text-gray-500 mt-0.5">{description}</p>
             </div>
         </div>
     }
 }
 
-// -- 3 checks forenses
 #[component]
 fn ForensicChecks(
     hash_match: Option<bool>,
@@ -121,7 +146,7 @@ fn ForensicChecks(
             <p class="text-xs font-semibold text-gray-400 uppercase tracking-wide">
                 "Forensic Checks"
             </p>
-            <div class="grid grid-cols-1 gap-2">
+            <div class="flex flex-col gap-2">
                 <ForensicRow
                     label="Hash integrity"
                     description="SHA-256 recomputed and compared"
@@ -155,14 +180,10 @@ fn ForensicRow(
     value: Option<bool>,
     children: Children,
 ) -> impl IntoView {
-    let (_dot_color, badge_text, badge_class) = match value {
-        Some(true) => (
-            "#16a34a",
-            "PASS",
-            "bg-green-50 text-green-700 border-green-200",
-        ),
-        Some(false) => ("#dc2626", "FAIL", "bg-red-50 text-red-700 border-red-200"),
-        None => ("#9ca3af", "N/A", "bg-gray-50 text-gray-500 border-gray-200"),
+    let (badge_text, badge_class) = match value {
+        Some(true) => ("PASS", "bg-green-50 text-green-700 border-green-200"),
+        Some(false) => ("FAIL", "bg-red-50 text-red-700 border-red-200"),
+        None => ("N/A", "bg-gray-50 text-gray-500 border-gray-200"),
     };
 
     view! {
@@ -174,7 +195,10 @@ fn ForensicRow(
                 <p class="text-sm font-medium text-navy">{label}</p>
                 <p class="text-xs text-gray-400">{description}</p>
             </div>
-            <span class=format!("shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg border {}", badge_class)>
+            <span class=format!(
+                "shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg border {}",
+                badge_class
+            )>
                 {badge_text}
             </span>
         </div>

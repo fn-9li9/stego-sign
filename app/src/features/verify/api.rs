@@ -4,23 +4,23 @@ use serde::Deserialize;
 use web_sys::FormData;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct VerifyResponse {
-    pub success: bool,
-    pub data: Option<VerifyData>,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, Deserialize)]
 pub struct VerifyData {
     pub status: String,
     pub document_id: Option<String>,
     pub filename: Option<String>,
     pub hash: Option<String>,
     pub author: Option<String>,
-    pub signed_at: Option<String>,
+    pub signed_at: Option<serde_json::Value>,
     pub hash_match: Option<bool>,
     pub signature_valid: Option<bool>,
     pub registered: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct VerifyResponse {
+    pub success: bool,
+    pub data: Option<VerifyData>,
+    pub error: Option<String>,
 }
 
 pub async fn verify_document(file: web_sys::File) -> Result<VerifyData, String> {
