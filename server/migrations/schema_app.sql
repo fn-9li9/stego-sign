@@ -1,5 +1,6 @@
 CREATE SCHEMA IF NOT EXISTS app;
 
+-- ENUM (NO usar IF NOT EXISTS aquí)
 CREATE TYPE app.document_status AS ENUM ('VALID', 'TAMPERED', 'UNREGISTERED', 'INVALID');
 
 CREATE TABLE IF NOT EXISTS app.documents (
@@ -28,7 +29,8 @@ CREATE TABLE IF NOT EXISTS app.audit_log (
     checked_at TIMESTAMPTZ NOT NULL DEFAULT now (),
     result app.document_status NOT NULL,
     checked_hash TEXT,
-    details JSONB NOT NULL DEFAULT '{}'
+    details JSONB NOT NULL DEFAULT '{}',
+    action TEXT NOT NULL DEFAULT 'VERIFY'
 );
 
 CREATE INDEX IF NOT EXISTS idx_audit_document_id ON app.audit_log (document_id);
@@ -36,3 +38,5 @@ CREATE INDEX IF NOT EXISTS idx_audit_document_id ON app.audit_log (document_id);
 CREATE INDEX IF NOT EXISTS idx_audit_checked_at ON app.audit_log (checked_at DESC);
 
 CREATE INDEX IF NOT EXISTS idx_audit_result ON app.audit_log (result);
+
+CREATE INDEX IF NOT EXISTS idx_audit_action ON app.audit_log (action);
