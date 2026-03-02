@@ -103,13 +103,41 @@ pub async fn download(client: &Client, bucket: &str, key: &str) -> anyhow::Resul
     Ok(data)
 }
 
-pub async fn count_objects(client: &aws_sdk_s3::Client, bucket: &str) -> Result<u64, String> {
+// pub async fn count_objects(client: &aws_sdk_s3::Client, bucket: &str) -> Result<u64, String> {
+//     let resp = client
+//         .list_objects_v2()
+//         .bucket(bucket)
+//         .send()
+//         .await
+//         .map_err(|e| e.to_string())?;
+
+//     Ok(resp.key_count().unwrap_or(0) as u64)
+// }
+
+pub async fn download_storage(
+    client: &aws_sdk_s3::Client,
+    bucket: &str,
+    key: &str,
+) -> Result<(bytes::Bytes, String), String> {
     let resp = client
-        .list_objects_v2()
+        .get_object()
         .bucket(bucket)
+        .key(key)
         .send()
         .await
         .map_err(|e| e.to_string())?;
 
-    Ok(resp.key_count().unwrap_or(0) as u64)
+    let content_type = resp
+        .content_type()
+        .unwrap_or("application/octet-stream")
+        .to_string();
+
+    let data = resp
+        .body
+        .collect()
+        .await
+        .map_err(|e| e.to_string())?
+        .into_bytes();
+
+    Ok((data, content_type))
 }
