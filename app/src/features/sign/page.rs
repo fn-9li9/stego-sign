@@ -4,7 +4,7 @@ use lucide_leptos::{
 };
 use wasm_bindgen_futures::spawn_local;
 
-use super::api::{download_url, sign_document, SignData};
+use super::api::{sign_document, SignData};
 use super::components::{
     drop_zone::DropZone, result_card::ResultCard, steps_flow::StepsFlow, steps_modal::StepsModal,
 };
@@ -73,7 +73,7 @@ pub fn SignPage() -> impl IntoView {
                 </p>
             </div>
 
-            // -- form card (oculto cuando hay success)
+            // -- form card
             {move || {
                 if matches!(state.get(), SignState::Success(_)) {
                     view! { <div></div> }.into_any()
@@ -81,7 +81,6 @@ pub fn SignPage() -> impl IntoView {
                     view! {
                         <div class="card p-8 flex flex-col gap-6">
 
-                            // -- drop zone + steps flow
                             <div>
                                 <label class="block text-sm font-semibold text-navy mb-2">
                                     "File"
@@ -94,7 +93,6 @@ pub fn SignPage() -> impl IntoView {
                                 </div>
                             </div>
 
-                            // -- author input
                             <div>
                                 <label class="block text-sm font-semibold text-navy mb-2">
                                     "Author"
@@ -113,7 +111,6 @@ pub fn SignPage() -> impl IntoView {
                                 </div>
                             </div>
 
-                            // -- error banner
                             {move || {
                                 if let SignState::Error(e) = state.get() {
                                     view! {
@@ -127,7 +124,6 @@ pub fn SignPage() -> impl IntoView {
                                 }
                             }}
 
-                            // -- submit button
                             {move || {
                                 let loading = matches!(state.get(), SignState::Loading);
                                 view! {
@@ -161,13 +157,15 @@ pub fn SignPage() -> impl IntoView {
             // -- result card + action buttons
             {move || {
                 if let SignState::Success(data) = state.get() {
+                    // -- clona los campos necesarios ANTES de mover data a ResultCard
                     let doc_id   = data.document_id.clone();
                     let filename = data.filename.clone();
+                    tracing::debug!(doc_id = %doc_id, filename = %filename, "success state — ready for download");
+
                     view! {
                         <div class="flex flex-col gap-4">
                             <ResultCard data=data />
 
-                            // -- action buttons
                             <div class="grid grid-cols-2 gap-3">
 
                                 // -- sign other
@@ -183,15 +181,16 @@ pub fn SignPage() -> impl IntoView {
                                 <button
                                     class="inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl hover:from-primary-600 hover:to-primary-700 hover:shadow-lg hover:shadow-primary-500/20 transform hover:scale-[1.02] transition-all duration-300"
                                     on:click=move |_| {
-                                        // -- trigger download via hidden anchor
                                         #[cfg(feature = "hydrate")]
                                         {
                                             use leptos::wasm_bindgen::JsCast;
+                                            use crate::features::sign::api::download_url;
+                                            let url = download_url(&doc_id);
                                             if let Some(window) = web_sys::window() {
                                                 if let Some(document) = window.document() {
                                                     if let Ok(a) = document.create_element("a") {
                                                         let a = a.unchecked_into::<web_sys::HtmlAnchorElement>();
-                                                        a.set_href(&download_url(&doc_id));
+                                                        a.set_href(&url);
                                                         a.set_download(&format!("signed_{}", filename));
                                                         a.set_target("_blank");
                                                         let body = document.body().unwrap();
@@ -202,7 +201,6 @@ pub fn SignPage() -> impl IntoView {
                                                 }
                                             }
                                         }
-                                        // -- reset state
                                         on_reset();
                                     }
                                 >

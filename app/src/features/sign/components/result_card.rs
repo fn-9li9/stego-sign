@@ -1,20 +1,20 @@
-use super::super::api::{download_url, SignData};
+use super::super::api::SignData;
 use leptos::prelude::*;
-use lucide_leptos::{CircleCheck, Copy, Download, Hash, KeyRound};
+use lucide_leptos::{CircleCheck, Copy, Hash, KeyRound};
 
 #[component]
 pub fn ResultCard(data: SignData) -> impl IntoView {
     let copied = RwSignal::new(false);
-    let hash = data.hash.clone();
+    let hash_copy = data.hash.clone(); // -- clone antes del closure
+    tracing::debug!(hash = %hash_copy, "document hash ready for copy");
+    let hash_view = data.hash.clone(); // -- clone para el view
 
     let copy_hash = move |_| {
         #[cfg(feature = "hydrate")]
         {
-            use leptos::wasm_bindgen::JsCast;
             use wasm_bindgen_futures::spawn_local;
-            let h = hash.clone();
+            let h = hash_copy.clone(); // -- usa la copia
             spawn_local(async move {
-                // -- accede al clipboard via js directamente
                 let window = web_sys::window().unwrap();
                 let nav: web_sys::Navigator = window.navigator();
                 let clipboard = nav.clipboard();
@@ -28,8 +28,6 @@ pub fn ResultCard(data: SignData) -> impl IntoView {
 
     view! {
         <div class="flex flex-col gap-6 p-6 bg-white border border-green-200 rounded-2xl shadow-sm">
-
-            // -- success header
             <div class="flex items-center gap-3">
                 <div class="p-2 bg-green-50 rounded-xl">
                     <CircleCheck size=24 color="#16a34a" />
@@ -40,20 +38,19 @@ pub fn ResultCard(data: SignData) -> impl IntoView {
                 </div>
             </div>
 
-            // -- metadata
             <div class="flex flex-col gap-3">
                 <MetaRow icon_color="#7287fd" label="Filename"    value=data.filename.clone() />
                 <MetaRow icon_color="#7287fd" label="Author"      value=data.author.clone() />
                 <MetaRow icon_color="#7287fd" label="Document ID" value=data.document_id.clone() />
 
-                // -- hash con copy
                 <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
                     <div class="mt-0.5 shrink-0">
                         <Hash size=16 color="#9ca3af" />
                     </div>
                     <div class="flex-1 min-w-0">
                         <p class="text-xs text-gray-400 mb-1">"SHA-256 Hash"</p>
-                        <p class="text-xs font-mono text-gray-600 break-all">{data.hash.clone()}</p>
+                        // -- usa hash_view, no data.hash
+                        <p class="text-xs font-mono text-gray-600 break-all">{hash_view}</p>
                     </div>
                     <button
                         class="shrink-0 p-1.5 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded-lg transition-all"
@@ -70,18 +67,6 @@ pub fn ResultCard(data: SignData) -> impl IntoView {
                     </p>
                 })}
             </div>
-
-            // -- download
-            <a
-                target="_blank"
-                rel="noopener noreferrer"
-                href=download_url(&data.document_id)
-                download=format!("signed_{}", data.filename)
-                class="inline-flex items-center justify-center gap-2 w-full px-6 py-3 text-sm font-semibold text-white bg-gradient-to-r from-primary-500 to-primary-600 rounded-xl hover:from-primary-600 hover:to-primary-700 hover:shadow-lg hover:shadow-primary-500/20 transform hover:scale-[1.02] transition-all duration-300"
-            >
-                <Download size=18 color="#ffffff" />
-                "Download Signed File"
-            </a>
         </div>
     }
 }
