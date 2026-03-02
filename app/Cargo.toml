@@ -31,12 +31,15 @@ web-sys = { version = "0.3", features = [
     "FileList",
     "FormData",
     "HtmlInputElement",
+    "HtmlAnchorElement",
     "Window",
     "EventTarget",
     "DragEvent",
     "DataTransfer",
     "Navigator",
     "Clipboard",
+    "Document",
+    "HtmlElement",
 ] }
 
 gloo-timers = { version = "0.3", features = ["futures"] }
