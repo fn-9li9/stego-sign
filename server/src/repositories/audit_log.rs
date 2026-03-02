@@ -105,3 +105,22 @@ fn map_row(r: QueryResult) -> AuditLog {
         },
     }
 }
+
+pub async fn count_failed_verifications(db: &DatabaseConnection) -> Result<u64, DbErr> {
+    let row = db
+        .query_one(sea_orm::Statement::from_string(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT COUNT(*)::bigint AS count
+            FROM app.audit_log
+            WHERE action = 'VERIFY'
+              AND result != 'VALID'::app.document_status
+            "#
+            .to_string(),
+        ))
+        .await?;
+
+    Ok(row
+        .and_then(|r| r.try_get::<i64>("", "count").ok())
+        .unwrap_or(0) as u64)
+}
