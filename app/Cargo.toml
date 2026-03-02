@@ -33,7 +33,14 @@ web-sys = { version = "0.3", features = [
     "HtmlInputElement",
     "Window",
     "EventTarget",
+    "DragEvent",
+    "DataTransfer",
+    "Navigator",
+    "Clipboard",
 ] }
+
+gloo-timers = { version = "0.3", features = ["futures"] }
+wasm-bindgen-futures = "0.4"
 
 # -- utils
 thiserror = "2"
