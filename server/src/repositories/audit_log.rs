@@ -1,3 +1,4 @@
+use sea_orm::DbErr;
 use sea_orm::{ConnectionTrait, DatabaseConnection, QueryResult};
 use tracing::info;
 use uuid::Uuid;
@@ -74,4 +75,18 @@ pub async fn list_by_document(
             }
         })
         .collect())
+}
+
+pub async fn count_by_action(db: &DatabaseConnection, action: &str) -> Result<u64, DbErr> {
+    let row = db
+        .query_one(sea_orm::Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            "SELECT COUNT(*)::bigint AS count FROM app.audit_log WHERE action = $1",
+            [action.into()],
+        ))
+        .await?;
+
+    Ok(row
+        .and_then(|r| r.try_get::<i64>("", "count").ok())
+        .unwrap_or(0) as u64)
 }
