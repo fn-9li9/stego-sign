@@ -4,7 +4,7 @@ use axum::{
     extract::{Multipart, State},
     response::IntoResponse,
 };
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use uuid::Uuid;
 
 use crate::{
@@ -15,10 +15,9 @@ use crate::{
         response::{ApiError, ApiResponse},
     },
     repositories::{audit_log as audit_repo, document as doc_repo, object as obj_repo},
-    services::{crypto, stego, storage},
+    services::{crypto, qr, stego, storage, watermark},
 };
 
-// -- POST /api/v1/sign
 pub async fn sign_handler(
     State(state): State<AppState>,
     mut multipart: Multipart,
@@ -26,6 +25,7 @@ pub async fn sign_handler(
     let mut file_bytes = None;
     let mut filename = String::from("unknown");
     let mut author = String::from("anonymous");
+    let mut wm_pos = "bottom-right".to_string();
 
     while let Ok(Some(field)) = multipart.next_field().await {
         match field.name() {
@@ -35,6 +35,12 @@ pub async fn sign_handler(
             }
             Some("author") => {
                 author = field.text().await.unwrap_or_default();
+            }
+            Some("watermark_position") => {
+                wm_pos = field
+                    .text()
+                    .await
+                    .unwrap_or_else(|_| "bottom-right".to_string());
             }
             _ => {}
         }
@@ -54,11 +60,8 @@ pub async fn sign_handler(
     info!(filename = %filename, author = %author, "sign request received");
 
     let file_size = bytes.len() as i64;
-
-    // -- 1. sha256 del original
     let hash = crypto::sha256(&bytes);
 
-    // -- 2. firma el hash con Ed25519
     let signature = match crypto::sign(&hash, state.signing_key.as_str()) {
         Ok(s) => s,
         Err(e) => {
@@ -70,8 +73,10 @@ pub async fn sign_handler(
         }
     };
 
-    // -- 3. embebe payload esteganográfico
     let document_id = Uuid::new_v4();
+    let verification_code = qr::generate_verification_code();
+
+    // -- embed stego payload
     let signed_bytes =
         match stego::embed(&bytes, &filename, document_id, &hash, &signature, &author) {
             Ok(b) => b,
@@ -85,7 +90,33 @@ pub async fn sign_handler(
             }
         };
 
-    // -- 4. sube original al bucket uploads
+    // -- genera QR y aplica watermark si es PDF
+    let verify_url = format!("{}/verify?code={}", state.app_base_url, verification_code);
+    let final_bytes = if filename.to_lowercase().ends_with(".pdf") {
+        match qr::generate_qr_png(&verify_url, 256) {
+            Ok(qr_png) => {
+                let pos = watermark::WatermarkPosition::from_str(&wm_pos);
+                match watermark::insert_qr_into_pdf(&signed_bytes, &qr_png, pos, 72.0) {
+                    Ok(watermarked) => {
+                        info!(filename = %filename, "qr watermark applied");
+                        bytes::Bytes::from(watermarked)
+                    }
+                    Err(e) => {
+                        warn!(error = %e, "watermark failed, using signed file without watermark");
+                        bytes::Bytes::from(signed_bytes)
+                    }
+                }
+            }
+            Err(e) => {
+                warn!(error = %e, "qr generation failed");
+                bytes::Bytes::from(signed_bytes)
+            }
+        }
+    } else {
+        bytes::Bytes::from(signed_bytes)
+    };
+
+    // -- upload original
     let upload_key = format!("{}/{}", document_id, filename);
     if let Err(e) = storage::upload(
         &state.storage,
@@ -96,7 +127,7 @@ pub async fn sign_handler(
     )
     .await
     {
-        error!(error = %e, "upload original to minio failed");
+        error!(error = %e, "upload original failed");
         return ApiError {
             status: StatusCode::INTERNAL_SERVER_ERROR,
             message: "storage upload failed".to_string(),
@@ -104,13 +135,13 @@ pub async fn sign_handler(
         .into_response();
     }
 
-    // -- 5. sube archivo firmado al bucket signatures
+    // -- upload firmado (con watermark si PDF)
     let signed_key = format!("{}/signed_{}", document_id, filename);
     if let Err(e) = storage::upload(
         &state.storage,
         storage::BUCKET_SIGNATURES,
         &signed_key,
-        signed_bytes,
+        final_bytes,
         "application/octet-stream",
     )
     .await
@@ -123,7 +154,7 @@ pub async fn sign_handler(
         .into_response();
     }
 
-    // -- 6. registra original en files.objects
+    // -- registra en files.objects
     let object_id = match obj_repo::register(
         &state.db,
         obj_repo::CreateObject {
@@ -138,7 +169,7 @@ pub async fn sign_handler(
     {
         Ok(id) => id,
         Err(e) => {
-            error!(error = %e, "failed to register original in files.objects");
+            error!(error = %e, "register object failed");
             return ApiError {
                 status: StatusCode::INTERNAL_SERVER_ERROR,
                 message: "database error".to_string(),
@@ -147,11 +178,6 @@ pub async fn sign_handler(
         }
     };
 
-    // -- 7. registra archivo firmado en files.objects
-    let signed_size = {
-        // -- aproximación: el firmado es ligeramente mayor
-        file_size
-    };
     let _ = obj_repo::register(
         &state.db,
         obj_repo::CreateObject {
@@ -159,12 +185,12 @@ pub async fn sign_handler(
             object_key: signed_key.clone(),
             filename: format!("signed_{}", filename),
             content_type: "application/octet-stream".to_string(),
-            size_bytes: signed_size,
+            size_bytes: file_size,
         },
     )
     .await;
 
-    // -- 8. registra documento en app.documents
+    // -- registra documento con verification_code
     let doc_id = match doc_repo::create(
         &state.db,
         CreateDocument {
@@ -173,9 +199,11 @@ pub async fn sign_handler(
             signature: signature.clone(),
             author: author.clone(),
             object_id,
+            verification_code: Some(verification_code.clone()),
             metadata: Some(serde_json::json!({
                 "upload_key": upload_key,
                 "signed_key": signed_key,
+                "verify_url": verify_url,
             })),
         },
     )
@@ -192,7 +220,7 @@ pub async fn sign_handler(
         }
     };
 
-    // -- 9. registra en audit_log con action SIGN
+    // -- audit log
     let _ = audit_repo::create(
         &state.db,
         CreateAuditLog {
@@ -201,23 +229,24 @@ pub async fn sign_handler(
             result: DocumentStatus::Valid,
             checked_hash: Some(hash.clone()),
             details: serde_json::json!({
-                "filename":   filename,
-                "author":     author,
-                "upload_key": upload_key,
-                "signed_key": signed_key,
+                "filename":          filename,
+                "author":            author,
+                "verification_code": verification_code,
             }),
         },
     )
     .await;
 
-    info!(document_id = %doc_id, "document signed and stored");
+    info!(document_id = %doc_id, verification_code = %verification_code, "document signed");
 
     Json(ApiResponse::ok(serde_json::json!({
-        "document_id": doc_id,
-        "filename":    filename,
-        "hash":        hash,
-        "author":      author,
-        "signed_key":  signed_key,
+        "document_id":       doc_id,
+        "filename":          filename,
+        "hash":              hash,
+        "author":            author,
+        "signed_key":        signed_key,
+        "verification_code": verification_code,
+        "verify_url":        format!("{}/verify?code={}", state.app_base_url, verification_code),
     })))
     .into_response()
 }
