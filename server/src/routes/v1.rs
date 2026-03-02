@@ -5,7 +5,7 @@ use axum::{
 
 use crate::{
     AppState,
-    handlers::{admin, documents, health, registry, sign, stats, verify},
+    handlers::{admin, documents, health, registry, sign, stats, storage_download, verify},
 };
 
 pub fn router() -> Router<AppState> {
@@ -27,4 +27,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/admin/keygen", get(admin::keygen_handler))
         .route("/api/v1/stats", get(stats::stats_handler))
         .route("/api/v1/registry", get(registry::registry_handler))
+        .route(
+            "/api/v1/storage/{bucket}/{*key}",
+            get(storage_download::storage_download_handler),
+        )
 }
