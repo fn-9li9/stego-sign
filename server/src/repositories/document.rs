@@ -44,7 +44,7 @@ pub async fn find_by_hash(
             sea_orm::DatabaseBackend::Postgres,
             r#"
         SELECT id, filename, hash_sha256, signature, author,
-               object_id, signed_at, status::text, metadata
+               object_id, signed_at, status::text, metadata, verification_code
         FROM app.documents
         WHERE hash_sha256 = $1
         LIMIT 1
@@ -66,7 +66,7 @@ pub async fn find_by_id(
             sea_orm::DatabaseBackend::Postgres,
             r#"
         SELECT id, filename, hash_sha256, signature, author,
-               object_id, signed_at, status::text, metadata
+               object_id, signed_at, status::text, metadata, verification_code
         FROM app.documents
         WHERE id = $1
         "#,
@@ -84,7 +84,7 @@ pub async fn list(db: &DatabaseConnection, limit: u64) -> Result<Vec<Document>, 
             sea_orm::DatabaseBackend::Postgres,
             r#"
         SELECT id, filename, hash_sha256, signature, author,
-               object_id, signed_at, status::text, metadata
+               object_id, signed_at, status::text, metadata, verification_code
         FROM app.documents
         ORDER BY signed_at DESC
         LIMIT $1
@@ -107,6 +107,7 @@ fn map_row(r: sea_orm::QueryResult) -> Document {
         author: r.try_get("", "author").unwrap(),
         object_id: r.try_get("", "object_id").unwrap(),
         signed_at: r.try_get("", "signed_at").unwrap(),
+        verification_code: r.try_get("", "verification_code").ok(),
         metadata: r.try_get("", "metadata").ok(),
         status: match status_str.as_str() {
             "VALID" => DocumentStatus::Valid,
@@ -128,4 +129,25 @@ pub async fn count_all(db: &DatabaseConnection) -> Result<u64, DbErr> {
     Ok(row
         .and_then(|r| r.try_get::<i64>("", "count").ok())
         .unwrap_or(0) as u64)
+}
+
+pub async fn find_by_verification_code(
+    db: &DatabaseConnection,
+    code: &str,
+) -> Result<Option<Document>, sea_orm::DbErr> {
+    let row = db
+        .query_one(sea_orm::Statement::from_sql_and_values(
+            sea_orm::DatabaseBackend::Postgres,
+            r#"
+            SELECT id, filename, hash_sha256, signature, author,
+                   object_id, signed_at, status::text, metadata, verification_code
+            FROM app.documents
+            WHERE verification_code = $1
+            LIMIT 1
+            "#,
+            [code.into()],
+        ))
+        .await?;
+
+    Ok(row.map(map_row))
 }
