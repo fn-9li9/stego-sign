@@ -35,6 +35,7 @@ pub struct Document {
     pub signed_at: DateTime<Utc>,
     pub status: DocumentStatus,
     pub metadata: Option<serde_json::Value>,
+    pub verification_code: Option<String>,
 }
 
 // -- payload used to create a new document
@@ -46,4 +47,5 @@ pub struct CreateDocument {
     pub author: String,
     pub object_id: Uuid,
     pub metadata: Option<serde_json::Value>,
+    pub verification_code: Option<String>,
 }
