@@ -20,6 +20,7 @@ pub struct VerificationEntry {
     pub result: String,
     pub checked_hash: Option<String>,
     pub checked_at: String,
+    pub upload_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -59,4 +60,8 @@ pub fn download_url(document_id: &str) -> String {
         api_base_url(),
         document_id
     )
+}
+
+pub fn storage_download_url(bucket: &str, key: &str) -> String {
+    format!("{}/api/v1/storage/{}/{}", api_base_url(), bucket, key)
 }

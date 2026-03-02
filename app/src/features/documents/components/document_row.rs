@@ -4,7 +4,7 @@ use lucide_leptos::{
     Hash,
 };
 
-use super::super::api::{download_url, SignedDoc, VerificationEntry};
+use super::super::api::{download_url, storage_download_url, SignedDoc, VerificationEntry};
 
 // -- fila para documento firmado
 #[component]
@@ -135,6 +135,12 @@ pub fn VerificationRow(entry: VerificationEntry) -> impl IntoView {
     };
     let result_label = entry.result.clone();
 
+    let filename = entry
+        .filename
+        .as_deref()
+        .unwrap_or("verified_file")
+        .to_string();
+
     view! {
         <div class="flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-xl hover:border-primary-200 hover:shadow-sm transition-all duration-200 group">
 
@@ -181,6 +187,17 @@ pub fn VerificationRow(entry: VerificationEntry) -> impl IntoView {
                 {result_icon}
                 {result_label}
             </span>
+
+            {entry.upload_key.as_ref().map(|key| view! {
+                <a
+                    href=storage_download_url("uploads", key)
+                    download=filename.clone()
+                    class="shrink-0 p-2 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded-lg transition-all duration-200"
+                    title="Download verified file"
+                >
+                    <Download size=16 color="#9ca3af" />
+                </a>
+            })}
         </div>
     }
 }
