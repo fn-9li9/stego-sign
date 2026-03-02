@@ -6,7 +6,7 @@ use crate::features::{
     documents::page::DocumentsPage, home::page::HomePage, sign::page::SignPage,
     verify::page::VerifyPage,
 };
-use crate::shared::components::navbar::Navbar;
+use crate::shared::components::{footer::Footer, navbar::Navbar};
 
 #[cfg(feature = "ssr")]
 pub fn shell(options: leptos::config::LeptosOptions) -> impl IntoView {
@@ -22,8 +22,8 @@ pub fn shell(options: leptos::config::LeptosOptions) -> impl IntoView {
                 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
                 <style type="text/tailwindcss">
                     "@theme {
-                        --font-body: 'Inter', sans-serif;
-                        --font-display: 'Poppins', sans-serif;
+                        --font-body:              'Inter', sans-serif;
+                        --font-display:           'Poppins', sans-serif;
                         --color-primary-50:       #fef2f2;
                         --color-primary-400:      #e83d61;
                         --color-primary-500:      #d20f39;
@@ -49,11 +49,6 @@ pub fn shell(options: leptos::config::LeptosOptions) -> impl IntoView {
                 </style>
                 <link rel="preconnect" href="https://fonts.googleapis.com"/>
                 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet"/>
-                <script>
-                    "window.addEventListener('scroll', () => {
-                            document.querySelector('nav')?.classList.toggle('scrolled', window.scrollY > 10);
-                        });"
-                </script>
             </head>
             <body>
                 <App/>
@@ -70,16 +65,23 @@ pub fn App() -> impl IntoView {
         <Title text="StegoSign — Document Integrity"/>
         <Router>
             <Navbar/>
-            <main class="min-h-screen pt-16 px-4 max-w-6xl mx-auto">
+            <main class="min-h-screen pt-16">
                 <Routes fallback=|| view! {
-                    <p class="text-red-400 text-center mt-20 text-xl">"Page not found"</p>
+                    <div class="flex flex-col items-center justify-center min-h-screen gap-4">
+                        <span class="text-6xl">"🔍"</span>
+                        <h1 class="text-2xl font-display font-bold text-navy">"Page not found"</h1>
+                        <a href="/" class="text-primary-500 hover:text-primary-600 font-medium">
+                            "← Back to home"
+                        </a>
+                    </div>
                 }>
                     <Route path=path!("/")          view=HomePage/>
-                    <Route path=path!("/sign")          view=SignPage/>
+                    <Route path=path!("/sign")      view=SignPage/>
                     <Route path=path!("/verify")    view=VerifyPage/>
                     <Route path=path!("/documents") view=DocumentsPage/>
                 </Routes>
             </main>
+            <Footer/>
         </Router>
     }
 }
