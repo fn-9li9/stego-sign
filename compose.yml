@@ -4,15 +4,15 @@ services:
     container_name: stego-db
     restart: unless-stopped
     environment:
-      POSTGRES_DB:       ${POSTGRES_DB:-stegosign}
-      POSTGRES_USER:     ${POSTGRES_USER:-sre}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sre}
+      POSTGRES_DB:       ${POSTGRES_DB}
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     expose:
       - "5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sre} -d ${POSTGRES_DB:-stegosign}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,10 +24,10 @@ services:
     expose:
       - "9000"
     ports:
-      - "${MINIO_CONSOLE_PORT:-55546}:9001"
+      - "${MINIO_CONSOLE_PORT}:9001"
     environment:
-      MINIO_ROOT_USER:     ${MINIO_ROOT_USER:-admin}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-fn-stella-sre}
+      MINIO_ROOT_USER:     ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
     volumes:
       - minio_data:/mnt/data
       - ./minio.license:/minio.license:ro
@@ -45,26 +45,23 @@ services:
     container_name: stego-server
     restart: unless-stopped
     environment:
-      DATABASE_URL:      postgres://${POSTGRES_USER:-sre}:${POSTGRES_PASSWORD:-sre}@db:5432/${POSTGRES_DB:-stegosign}
-      POSTGRES_DB:       ${POSTGRES_DB:-stegosign}
-      POSTGRES_USER:     ${POSTGRES_USER:-sre}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sre}
+      DATABASE_URL:      postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      POSTGRES_DB:       ${POSTGRES_DB}
+      POSTGRES_USER:     ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_HOST:     db
       POSTGRES_PORT:     5432
       MINIO_ENDPOINT:    http://files:9000
-      MINIO_ACCESS_KEY:  ${MINIO_ROOT_USER:-admin}
-      MINIO_SECRET_KEY:  ${MINIO_ROOT_PASSWORD:-fn-stella-sre}
-      SERVER_HOST:       ${SERVER_HOST:-0.0.0.0}
+      MINIO_ACCESS_KEY:  ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY:  ${MINIO_ROOT_PASSWORD}
+      SERVER_HOST:       0.0.0.0
       SERVER_PORT:       4000
-      RUST_LOG:          ${RUST_LOG:-info}
+      RUST_LOG:          ${RUST_LOG}
       SIGNING_KEY:       ${SIGNING_KEY}
       VERIFY_KEY:        ${VERIFY_KEY}
-      APP_BASE_URL:      ${APP_BASE_URL:-http://localhost:55548}
-    expose:
-      - "4000"
-    server:
+      APP_BASE_URL:      ${APP_BASE_URL}
     ports:
-      - "${SERVER_PORT:-55547}:4000"
+      - "${SERVER_PORT}:4000"  # expone SERVER_PORT al host
     depends_on:
       db:
         condition: service_healthy
@@ -75,19 +72,26 @@ services:
     build:
       context: ./app
       dockerfile: Dockerfile
+      args:
+        # SSR: Leptos server llama al server internamente
+        API_BASE_URL: http://localhost:${SERVER_PORT}
+        # CSR: el browser del usuario llama al server
+        # en producción cambia localhost por tu dominio/IP pública
+        PUBLIC_API_BASE_URL: http://localhost:${SERVER_PORT}
     container_name: stego-app
     restart: unless-stopped
     environment:
-      APP_ENV:             ${APP_ENV:-production}
-      API_BASE_URL:        http://server:4000          # SSR: interno Docker
-      PUBLIC_API_BASE_URL: http://localhost:55547  # CSR: desde el browser
-      LEPTOS_OUTPUT_NAME:  ${LEPTOS_OUTPUT_NAME:-stego-app}
-      LEPTOS_SITE_ROOT:    ${LEPTOS_SITE_ROOT:-site}
-      LEPTOS_SITE_PKG_DIR: ${LEPTOS_SITE_PKG_DIR:-pkg}
+      APP_ENV:             ${APP_ENV}
+      API_BASE_URL:        http://localhost:${SERVER_PORT}
+      PUBLIC_API_BASE_URL: http://localhost:${SERVER_PORT}
+      LEPTOS_OUTPUT_NAME:  ${LEPTOS_OUTPUT_NAME}
+      LEPTOS_SITE_ROOT:    ${LEPTOS_SITE_ROOT}
+      LEPTOS_SITE_PKG_DIR: ${LEPTOS_SITE_PKG_DIR}
       LEPTOS_SITE_ADDR:    0.0.0.0:3001
-      LEPTOS_RELOAD_PORT:  ${LEPTOS_RELOAD_PORT:-3002}
+      LEPTOS_RELOAD_PORT:  ${LEPTOS_RELOAD_PORT}
+      LEPTOS_WASM_OPT_VERSION: ${LEPTOS_WASM_OPT_VERSION}
     ports:
-      - "${APP_PORT:-55548}:3001"
+      - "${APP_PORT}:3001"
     depends_on:
       - server
 
