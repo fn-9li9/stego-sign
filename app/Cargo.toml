@@ -40,6 +40,8 @@ web-sys = { version = "0.3", features = [
     "Clipboard",
     "Document",
     "HtmlElement",
+    "Element",
+    "HtmlMetaElement",
 ] }
 
 gloo-timers = { version = "0.3", features = ["futures"] }
