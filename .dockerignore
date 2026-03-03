@@ -1,0 +1,8 @@
+**/target/
+**/.env
+**/.env.*
+**/*.log
+.git/
+.gitignore
+minio.license
+compose.override.yml
