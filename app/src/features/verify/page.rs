@@ -1,13 +1,14 @@
 use leptos::prelude::*;
 use leptos_router::hooks::use_query_map;
-use lucide_leptos::{
-    ArrowRight, CircleAlert, FileSearch, Hash, KeyRound, LoaderCircle, RotateCcw, Upload,
-};
-use wasm_bindgen_futures::spawn_local;
+use lucide_leptos::{ArrowRight, CircleAlert, FileSearch, Hash, LoaderCircle, RotateCcw, Upload};
 
-use super::api::{verify_by_code, verify_document, CodeVerifyData, VerifyData};
+use super::api::{CodeVerifyData, VerifyData};
 use super::components::{
-    drop_zone::VerifyDropZone, result_card::VerifyResultCard, steps_flow::VerifyStepsFlow,
+    code_input::{format_code, CodeInput},
+    code_result::CodeResultCard,
+    drop_zone::VerifyDropZone,
+    result_card::VerifyResultCard,
+    steps_flow::VerifyStepsFlow,
     steps_modal::VerifyStepsModal,
 };
 
@@ -17,6 +18,7 @@ enum Tab {
     Code,
 }
 
+#[allow(dead_code)]
 #[derive(Clone)]
 enum VerifyState {
     Idle,
@@ -32,23 +34,32 @@ pub fn VerifyPage() -> impl IntoView {
     let state = RwSignal::new(VerifyState::Idle);
     let show_modal = RwSignal::new(false);
     let active_tab = RwSignal::new(Tab::Upload);
-    let code_input = RwSignal::new(String::new());
+    let code_raw = RwSignal::new(String::new());
 
-    // -- si viene con ?code= en la URL, activa tab Code y prellenea
+    // -- si viene con ?code= en la URL
     let query = use_query_map();
-    let initial_code = query.with(|q| q.get("code")).unwrap_or_default();
-    if !initial_code.is_empty() {
-        active_tab.set(Tab::Code);
-        code_input.set(initial_code.clone());
+    let initial_code =
+        query.with(|q: &leptos_router::params::ParamsMap| q.get("code").unwrap_or_default());
 
-        // -- auto-verifica si viene con código en URL
+    if !initial_code.is_empty() {
+        let raw: String = initial_code
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .map(|c| c.to_ascii_uppercase())
+            .take(6)
+            .collect();
+        active_tab.set(Tab::Code);
+        code_raw.set(raw.clone());
+
         #[cfg(feature = "hydrate")]
         {
-            let code = initial_code.clone();
+            use super::api::verify_by_code;
+            use wasm_bindgen_futures::spawn_local;
+            let formatted = format_code(&raw);
             spawn_local(async move {
                 state.set(VerifyState::Loading);
-                match verify_by_code(code).await {
-                    Ok(data) => state.set(VerifyState::CodeSuccess(data)),
+                match verify_by_code(formatted).await {
+                    Ok(d) => state.set(VerifyState::CodeSuccess(d)),
                     Err(e) => state.set(VerifyState::Error(e)),
                 }
             });
@@ -57,7 +68,7 @@ pub fn VerifyPage() -> impl IntoView {
 
     let on_reset = move || {
         file.set(None);
-        code_input.set(String::new());
+        code_raw.set(String::new());
         state.set(VerifyState::Idle);
     };
 
@@ -72,34 +83,45 @@ pub fn VerifyPage() -> impl IntoView {
             return;
         };
         state.set(VerifyState::Loading);
-        spawn_local(async move {
-            match verify_document(f).await {
-                Ok(data) => state.set(VerifyState::Success(data)),
-                Err(e) => state.set(VerifyState::Error(e)),
-            }
-        });
+        #[cfg(feature = "hydrate")]
+        {
+            use super::api::verify_document;
+            use wasm_bindgen_futures::spawn_local;
+            spawn_local(async move {
+                match verify_document(f).await {
+                    Ok(d) => state.set(VerifyState::Success(d)),
+                    Err(e) => state.set(VerifyState::Error(e)),
+                }
+            });
+        }
+        #[cfg(not(feature = "hydrate"))]
+        let _ = f;
     };
 
     let on_submit_code = move |_| {
-        let code = code_input.get();
-        let code = code.trim().to_uppercase();
-        if code.is_empty() {
+        let raw = code_raw.get();
+        let formatted = format_code(&raw);
+        if formatted.len() != 7 {
             state.set(VerifyState::Error(
-                "Please enter a verification code".to_string(),
+                "Please enter all 6 characters".to_string(),
             ));
             return;
         }
         state.set(VerifyState::Loading);
-        spawn_local(async move {
-            match verify_by_code(code).await {
-                Ok(data) => state.set(VerifyState::CodeSuccess(data)),
-                Err(e) => state.set(VerifyState::Error(e)),
-            }
-        });
+        #[cfg(feature = "hydrate")]
+        {
+            use super::api::verify_by_code;
+            use wasm_bindgen_futures::spawn_local;
+            spawn_local(async move {
+                match verify_by_code(formatted).await {
+                    Ok(d) => state.set(VerifyState::CodeSuccess(d)),
+                    Err(e) => state.set(VerifyState::Error(e)),
+                }
+            });
+        }
     };
 
     view! {
-        // -- modal
         {move || show_modal.get().then(|| view! {
             <VerifyStepsModal on_close=Callback::new(move |_| show_modal.set(false)) />
         })}
@@ -108,21 +130,22 @@ pub fn VerifyPage() -> impl IntoView {
 
             // -- header
             <div class="mb-10">
-                <h1 class="text-3xl font-display font-semibold text-primary-600 mb-4">
+                <p class="text-sm font-semibold text-primary-600 mb-1">"Document Verification"</p>
+                <h1 class="text-3xl font-display font-semibold text-primary-600 mb-3">
                     "Verify a Document"
                 </h1>
-                <p class="text-gray-500 leading-relaxed text-sm">
-                    "Upload a signed file or enter a verification code to check document authenticity."
+                <p class="text-gray-500 text-sm leading-relaxed">
+                    "Upload a signed file or enter a verification code to check authenticity."
                 </p>
             </div>
 
-            // -- result views
+            // -- resultados
             {move || match state.get() {
                 VerifyState::Success(data) => view! {
                     <div class="flex flex-col gap-4">
                         <VerifyResultCard data=data />
                         <button
-                            class="inline-flex items-center justify-center gap-2 w-full px-5 py-3 text-sm font-semibold text-primary-600 bg-white border-2 border-primary-500 rounded-xl hover:bg-primary-50 hover:border-primary-600 transform hover:scale-[1.02] transition-all duration-300"
+                            class="inline-flex items-center justify-center gap-2 w-full px-5 py-3 text-sm font-semibold text-primary-600 bg-white border-2 border-primary-500 rounded-xl hover:bg-primary-50 transform hover:scale-[1.02] transition-all duration-300"
                             on:click=move |_| on_reset()
                         >
                             <RotateCcw size=18 color="#d20f39" />
@@ -132,7 +155,10 @@ pub fn VerifyPage() -> impl IntoView {
                 }.into_any(),
 
                 VerifyState::CodeSuccess(data) => view! {
-                    <CodeResultCard data=data on_reset=Callback::new(move |_| on_reset()) />
+                    <CodeResultCard
+                        data=data
+                        on_reset=Callback::new(move |_| on_reset())
+                    />
                 }.into_any(),
 
                 _ => view! {
@@ -158,12 +184,13 @@ pub fn VerifyPage() -> impl IntoView {
                                 on:click=move |_| { active_tab.set(Tab::Code); state.set(VerifyState::Idle); }
                             >
                                 <Hash size=15 color=if active_tab.get() == Tab::Code { "#d20f39" } else { "#9ca3af" } />
-                                "Code"
+                                "Verify Code"
                             </button>
                         </div>
 
-                        // -- contenido del tab activo
+                        // -- tab content
                         {move || match active_tab.get() {
+
                             Tab::Upload => view! {
                                 <div class="flex flex-col gap-6">
                                     <div>
@@ -178,7 +205,6 @@ pub fn VerifyPage() -> impl IntoView {
                                         </div>
                                     </div>
 
-                                    // -- error
                                     {move || if let VerifyState::Error(e) = state.get() {
                                         view! {
                                             <div class="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
@@ -188,7 +214,6 @@ pub fn VerifyPage() -> impl IntoView {
                                         }.into_any()
                                     } else { view! { <div></div> }.into_any() }}
 
-                                    // -- submit
                                     {move || {
                                         let loading = matches!(state.get(), VerifyState::Loading);
                                         view! {
@@ -218,32 +243,16 @@ pub fn VerifyPage() -> impl IntoView {
                             Tab::Code => view! {
                                 <div class="flex flex-col gap-6">
                                     <div>
-                                        <label class="block text-sm font-semibold text-navy mb-2">
+                                        <label class="block text-sm font-semibold text-navy mb-1">
                                             "Verification Code"
                                         </label>
-                                        <p class="text-xs text-gray-400 mb-3">
-                                            "Scan the QR on the signed document or enter the code manually — format: "
-                                            <span class="font-mono font-bold text-primary-500">"XDS-6H2"</span>
+                                        <p class="text-xs text-gray-400 mb-4">
+                                            "Found on the QR embedded in the signed document. Format: "
+                                            <span class="font-mono font-bold text-primary-500">"ABC-123"</span>
                                         </p>
-                                        <div class="relative">
-                                            <div class="absolute left-3 top-1/2 -translate-y-1/2">
-                                                <KeyRound size=16 color="#9ca3af" />
-                                            </div>
-                                            <input
-                                                type="text"
-                                                placeholder="ABC-123"
-                                                maxlength="7"
-                                                class="w-full pl-9 pr-4 py-3 text-sm font-mono uppercase border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500 transition-all duration-200 bg-white tracking-widest"
-                                                on:input=move |ev| {
-                                                    let val = event_target_value(&ev).to_uppercase();
-                                                    code_input.set(val);
-                                                }
-                                                prop:value=move || code_input.get()
-                                            />
-                                        </div>
+                                        <CodeInput value=code_raw />
                                     </div>
 
-                                    // -- error
                                     {move || if let VerifyState::Error(e) = state.get() {
                                         view! {
                                             <div class="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
@@ -253,7 +262,6 @@ pub fn VerifyPage() -> impl IntoView {
                                         }.into_any()
                                     } else { view! { <div></div> }.into_any() }}
 
-                                    // -- submit
                                     {move || {
                                         let loading = matches!(state.get(), VerifyState::Loading);
                                         view! {
@@ -283,115 +291,6 @@ pub fn VerifyPage() -> impl IntoView {
                     </div>
                 }.into_any()
             }}
-        </div>
-    }
-}
-
-// -- card para resultado de code verify
-#[component]
-fn CodeResultCard(data: CodeVerifyData, on_reset: Callback<()>) -> impl IntoView {
-    if !data.found {
-        return view! {
-            <div class="flex flex-col gap-4">
-                <div class="flex flex-col gap-4 p-6 bg-white border border-gray-200 rounded-2xl shadow-sm">
-                    <div class="flex items-center gap-4 p-4 bg-gray-50 border border-gray-100 rounded-xl">
-                        <div class="p-2 bg-gray-100 rounded-xl">
-                            <Hash size=24 color="#6b7280" />
-                        </div>
-                        <div>
-                            <p class="font-display font-bold text-lg text-gray-600">"INVALID CODE"</p>
-                            <p class="text-xs text-gray-400 mt-0.5">
-                                "This verification code does not exist in the registry"
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                <button
-                    class="inline-flex items-center justify-center gap-2 w-full px-5 py-3 text-sm font-semibold text-primary-600 bg-white border-2 border-primary-500 rounded-xl hover:bg-primary-50 transform hover:scale-[1.02] transition-all duration-300"
-                    on:click=move |_| on_reset.run(())
-                >
-                    <RotateCcw size=18 color="#d20f39" />
-                    "Try Again"
-                </button>
-            </div>
-        }.into_any();
-    }
-
-    let status = data.status.clone().unwrap_or_else(|| "VALID".to_string());
-    let signed_at = data.signed_at.as_ref().map(|v| match v {
-        serde_json::Value::String(s) => s.split('.').next().unwrap_or(s).replace('T', " "),
-        other => other.to_string(),
-    });
-
-    view! {
-        <div class="flex flex-col gap-4">
-            <div class=format!(
-                "flex flex-col gap-4 p-6 bg-white rounded-2xl shadow-sm border {}",
-                if status == "VALID" { "border-green-200" } else { "border-yellow-200" }
-            )>
-                // -- header
-                <div class=format!(
-                    "flex items-center gap-4 p-4 rounded-xl border {}",
-                    if status == "VALID" { "bg-green-50 border-green-100" } else { "bg-yellow-50 border-yellow-100" }
-                )>
-                    <lucide_leptos::CircleCheck size=28 color=if status == "VALID" { "#16a34a" } else { "#d97706" } />
-                    <div>
-                        <p class=format!(
-                            "font-display font-bold text-lg {}",
-                            if status == "VALID" { "text-green-700" } else { "text-yellow-700" }
-                        )>
-                            {status.clone()}
-                        </p>
-                        <p class="text-xs text-gray-500 mt-0.5">"Verified via code — no tampering check performed"</p>
-                    </div>
-                </div>
-
-                // -- metadata
-                <div class="flex flex-col gap-3">
-                    {data.filename.map(|v| view! {
-                        <MetaItem label="Filename" value=v />
-                    })}
-                    {data.author.map(|v| view! {
-                        <MetaItem label="Author" value=v />
-                    })}
-                    {data.verification_code.map(|v| view! {
-                        <MetaItem label="Code" value=v />
-                    })}
-                    {signed_at.map(|v| view! {
-                        <MetaItem label="Signed At" value=v />
-                    })}
-                    {data.hash.map(|v| view! {
-                        <div class="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
-                            <Hash size=14 color="#9ca3af" />
-                            <div class="min-w-0">
-                                <p class="text-xs text-gray-400 mb-0.5">"SHA-256"</p>
-                                <p class="text-xs font-mono text-gray-600 break-all">{v}</p>
-                            </div>
-                        </div>
-                    })}
-                </div>
-            </div>
-
-            <button
-                class="inline-flex items-center justify-center gap-2 w-full px-5 py-3 text-sm font-semibold text-primary-600 bg-white border-2 border-primary-500 rounded-xl hover:bg-primary-50 transform hover:scale-[1.02] transition-all duration-300"
-                on:click=move |_| on_reset.run(())
-            >
-                <RotateCcw size=18 color="#d20f39" />
-                "Verify Another"
-            </button>
-        </div>
-    }.into_any()
-}
-
-#[component]
-fn MetaItem(label: &'static str, value: String) -> impl IntoView {
-    view! {
-        <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-            <KeyRound size=14 color="#7287fd" />
-            <div class="min-w-0">
-                <p class="text-xs text-gray-400">{label}</p>
-                <p class="text-sm font-medium text-navy truncate">{value}</p>
-            </div>
         </div>
     }
 }
