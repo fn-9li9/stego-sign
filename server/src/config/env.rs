@@ -17,6 +17,8 @@ pub struct Env {
     pub verify_key: String,
     // -- app
     pub app_base_url: String,
+    // -- storage-bucket-prefix
+    pub storage_bucket_prefix: String,
 }
 
 impl Env {
@@ -57,6 +59,7 @@ impl Env {
             signing_key,
             verify_key,
             app_base_url: var("APP_BASE_URL", "http://localhost:3001"),
+            storage_bucket_prefix: var("STORAGE_BUCKET_PREFIX", "stego"),
         }
     }
 }
