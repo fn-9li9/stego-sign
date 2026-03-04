@@ -15,6 +15,7 @@ console_error_panic_hook = { version = "0.1", optional = true }
 leptos_axum = { version = "0.8.0", optional = true }
 tokio = { version = "1", features = ["rt-multi-thread"], optional = true }
 wasm-bindgen = { version = "0.2", optional = true }
+reqwest = { version = "0.12", features = ["json"], optional = true }
 
 lucide-leptos = { version = "2.576.0", features = ["all-icons"] }
 
@@ -50,6 +51,8 @@ wasm-bindgen-futures = "0.4"
 # -- utils
 thiserror = "2"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", optional = true }
+dotenvy = { version = "0.15", optional = true }
 
 [features]
 hydrate = ["leptos/hydrate", "dep:console_error_panic_hook", "dep:wasm-bindgen"]
@@ -57,6 +60,9 @@ ssr = [
     "dep:axum",
     "dep:tokio",
     "dep:leptos_axum",
+    "dep:reqwest",
+    "dep:tracing-subscriber",
+    "dep:dotenvy",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",
