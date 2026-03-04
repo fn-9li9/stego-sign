@@ -71,13 +71,33 @@ The browser never communicates directly with the server. All `/api/*` requests p
 
 ---
 
+## Application
+
+### Home
+
+The landing page introduces the system and its three-step pipeline: Sign, Verify, and Audit. It displays real-time statistics — total documents signed, verifications performed, tampering events detected, and objects in storage.
+
+![Navbar — StegoSign logo and main navigation links: Home, Sign, Verify, Documents](resources/navbar.png)
+
+![Hero section — main call to action with "Sign a Document" and "Verify Integrity" buttons](resources/home.png)
+
+![How it works — three-step pipeline: Sign, Verify, Audit with descriptions of each stage](resources/how-it-works.png)
+
+![Stats — live counters: Documents Signed, Verifications, Tampered Detected, Objects in Storage](resources/stats.png)
+
+![Footer — stack details (Rust + Axum, Leptos + WASM, PostgreSQL 17, MinIO AIStor | AWS S3), navigation links and academic attribution](resources/footer.png)
+
+---
+
 ## Signing Flow
 
-> How signing works — step by step
+> How a document gets signed — step by step
 
-![sign page](resources/sign-page.png)
-![sign result](resources/sign-result.png)
-![how signing works](resources/how-signing-works.png)
+![Sign page — file drop zone, pipeline steps indicator (Upload → SHA-256 → Ed25519 → Stego embed → Registry → Signed), and author field](resources/sign-page.png)
+
+![Sign result — Document Signed confirmation with filename, author, Document ID and SHA-256 hash. Options to download the signed file or sign another document](resources/sign-result.png)
+
+![How signing works modal — detailed breakdown of all 6 pipeline steps: File Upload, SHA-256 Hash, Ed25519 Signature, Steganographic Embedding, Registry & Storage, Verification ready](resources/how-signing-works.png)
 
 1. **File Upload** — the file is received via multipart form. Any format is supported: PDF, PNG, DOCX, binary, etc. The original bytes are preserved unchanged.
 2. **SHA-256 Hash** — a cryptographic hash of the original file bytes is computed. This 256-bit fingerprint uniquely identifies the file content.
@@ -90,17 +110,17 @@ The browser never communicates directly with the server. All `/api/*` requests p
 
 ## Verification Flow
 
-> How verification works — step by step
+> How a signed document gets verified — step by step
 
-![verify page](resources/verify-page.png)
-![verify valid](resources/verify-valid.png)
-![verify invalid](resources/verify-invalid.png)
-![verify code](resources/verify-code.png)
-![verify code valid](resources/verify-code-valid.png)
-![verify code invalid](resources/verify-code-invalid.png)
-![how verification works](resources/how-verification-works.png)
+### By file upload
 
-**By file upload:**
+![Verify page — file upload drop zone with tab switcher between "Upload File" and "Verify Code"](resources/verify-page.png)
+
+![Verify result: VALID — all three forensic checks pass (Hash integrity PASS, Ed25519 signature PASS, Registry match PASS) with full document metadata: filename, author, Document ID, signed timestamp and SHA-256 hash](resources/verify-valid.png)
+
+![Verify result: INVALID — all three forensic checks fail (Hash integrity FAIL, Ed25519 signature FAIL, Registry match FAIL). The file has no embedded payload or was not signed by this system](resources/verify-invalid.png)
+
+![How verification works modal — detailed breakdown of all 6 pipeline steps: File Upload, Payload Extraction, Hash Recomputation, Signature Verification, Registry Cross-check, Verdict](resources/how-verification-works.png)
 
 1. **Payload Extraction** — the pipeline scans the file for the magic delimiter `>>STEGO::PAYLOAD<<`. If not found, the file is classified as `INVALID` immediately.
 2. **Hash Recomputation** — the SHA-256 hash of the current file bytes (without the payload) is recomputed and compared against the hash stored in the embedded payload.
@@ -108,9 +128,15 @@ The browser never communicates directly with the server. All `/api/*` requests p
 4. **Registry Cross-check** — the document ID and hash are cross-checked against the PostgreSQL registry. A valid signature with no registry entry is classified as `UNREGISTERED`.
 5. **Verdict** — final classification: `VALID`, `TAMPERED`, `UNREGISTERED`, or `INVALID`.
 
-**By verification code:**
+### By verification code
 
-Each signed PDF contains a QR code with a 6-character code (e.g. `ABC-123`). This code can be entered directly in the verify page without uploading the file.
+Each signed PDF contains a QR code with a unique 6-character verification code (e.g. `ABC-123`). This code can be entered directly in the verify page without uploading the file, enabling instant verification from any device by scanning the QR.
+
+![Verify by code — segmented input field for the 6-character verification code found on the QR watermark embedded in the signed PDF](resources/verify-code.png)
+
+![Verify by code result: VALID — shows document metadata (filename, author, Document ID, signed timestamp, SHA-256 hash) retrieved directly from the registry by code lookup, without requiring file upload](resources/verify-code-valid.png)
+
+![Verify by code result: INVALID — code not found in registry or document has been revoked, showing no forensic metadata since the lookup is registry-only and does not perform cryptographic checks](resources/verify-code-invalid.png)
 
 > Every verification attempt is recorded in the audit log with its verdict, timestamp and file hash — providing a complete forensic trail.
 
@@ -118,19 +144,11 @@ Each signed PDF contains a QR code with a 6-character code (e.g. `ABC-123`). Thi
 
 ## Document Registry
 
-![documents signed](resources/documents-signed.png)
-![documents verifications](resources/documents-verifications.png)
+The registry page shows the complete forensic history of the system: all signed documents and all verification attempts, with status, author, timestamp and SHA-256 hash.
 
-The registry page shows the complete forensic history: all signed documents and all verification attempts, with status, author, timestamp and SHA-256 hash.
+![Signed documents tab — list of 3 documents (carta_bienvenida.pdf, inventario_marzo_2025.pdf, Documento sin título.pdf) all with VALID status, author and sign timestamp](resources/documents-signed.png)
 
----
-
-## Application
-
-![navbar](resources/navbar.png)
-![home](resources/home.png)
-![stats](resources/stats.png)
-![footer](resources/footer.png)
+![Verifications tab — audit log of 5 verification attempts with document name, hash, Document ID, timestamp and result (VALID or INVALID)](resources/documents-verifications.png)
 
 ---
 
@@ -258,6 +276,32 @@ make recreate-server # force recreate server (picks up new env vars)
 make logs s=server   # follow server logs
 make down-v          # stop all and remove volumes
 ```
+
+---
+
+## Resources
+
+Images referenced in this README are located in `resources/` with the following mapping:
+
+| file | description |
+|------|-------------|
+| `navbar.png` | Navigation bar |
+| `home.png` | Hero section |
+| `how-it-works.png` | Three-step pipeline section |
+| `stats.png` | Live statistics counters |
+| `footer.png` | Footer with stack and links |
+| `sign-page.png` | Sign page — empty state |
+| `sign-result.png` | Sign page — success result |
+| `how-signing-works.png` | Signing pipeline modal |
+| `verify-page.png` | Verify page — upload tab |
+| `verify-valid.png` | Verify result — VALID |
+| `verify-invalid.png` | Verify result — INVALID |
+| `verify-code.png` | Verify by code tab |
+| `verify-code-valid.png` | Verify by code result — VALID |
+| `verify-code-invalid.png` | Verify by code result — INVALID |
+| `how-verification-works.png` | Verification pipeline modal |
+| `documents-signed.png` | Documents registry — Signed tab |
+| `documents-verifications.png` | Documents registry — Verifications tab |
 
 ---
 
