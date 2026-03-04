@@ -37,6 +37,13 @@ help: ## show available commands
 up: ## start all services
 	docker compose up -d
 
+up-fresh: ## first deploy: start infra, migrate, then start server and app
+	docker compose up -d db aistor
+	@echo "→ waiting for db to be ready..."
+	@sleep 3
+	make migrate
+	docker compose up -d server app
+
 up-infra: ## start only db and aistor (for local dev)
 	docker compose up -d db aistor
 
@@ -112,8 +119,8 @@ dev: up-infra ## start infra + print next steps
 
 # -- keys
 keygen: ## generate ed25519 key pair and print to stdout
-	@echo "→ generating keys (server must be running on port $(SERVER_PORT))..."
-	@curl -s http://localhost:$(SERVER_PORT)/api/v1/admin/keygen | python3 -m json.tool
+	@echo "→ generating keys..."
+	@curl -s http://localhost:$(APP_PORT)/api/v1/admin/keygen | python3 -m json.tool
 
 # -- cleanup
 clean: ## remove build artifacts
