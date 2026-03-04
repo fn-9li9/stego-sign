@@ -37,13 +37,6 @@ help: ## show available commands
 up: ## start all services
 	docker compose up -d
 
-up-fresh: ## first deploy: start infra, migrate, then start server and app
-	docker compose up -d db aistor
-	@echo "→ waiting for db to be ready..."
-	@sleep 3
-	make migrate
-	docker compose up -d server app
-
 up-infra: ## start only db and aistor (for local dev)
 	docker compose up -d db aistor
 
@@ -81,6 +74,9 @@ deploy-aws: ## deploy with aws s3 storage (no aistor)
 	STORAGE_PROVIDER=aws \
 	STORAGE_ENDPOINT="" \
 	docker compose up -d --scale aistor=0 db server app
+
+recreate-server: ## force recreate server container (picks up new env vars)
+	docker compose up -d --force-recreate server
 
 # -- database migrations
 migrate: ## apply all schemas (files first, then app)
