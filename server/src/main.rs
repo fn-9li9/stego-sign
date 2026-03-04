@@ -39,9 +39,9 @@ async fn main() {
     // -- minio client + ensure buckets exist
     let s3_client = storage::build_client(&env).await;
     // -- self-healing: buckets se crean automáticamente al arrancar
-    storage::ensure_buckets(&s3_client, &db_conn)
+    storage::ensure_buckets(&s3_client, &db_conn, &env.storage_bucket_prefix)
         .await
-        .expect("failed to ensure minio buckets");
+        .expect("failed to ensure buckets");
 
     // -- signing keys (in prod: load from vault or env)
     // -- for now: hardcoded dev keys, replace with real key management
