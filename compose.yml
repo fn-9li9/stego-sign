@@ -16,6 +16,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - stegosign
 
   aistor:
     image: quay.io/minio/aistor/minio:latest
@@ -38,6 +40,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - stegosign
 
   server:
     build:
@@ -63,6 +67,8 @@ services:
     depends_on:
       - db
       - aistor
+    networks:
+      - stegosign
 
   app:
     build:
@@ -85,7 +91,13 @@ services:
       - "${APP_PORT}:3000"
     depends_on:
       - server
+    networks:
+      - stegosign
 
 volumes:
   pg_data:
   aistor_data:
+
+networks:
+  stegosign:
+    driver: bridge
