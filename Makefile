@@ -26,85 +26,99 @@ MIGRATIONS_DIR = server/migrations
 # -- help
 .DEFAULT_GOAL := help
 
-help: ## Show available commands
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
-		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+help: ## show available commands
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | while IFS= read -r line; do \
+		target=$$(echo "$$line" | cut -d: -f1); \
+		desc=$$(echo "$$line" | sed 's/^[^#]*## //'); \
+		printf "  \033[36m%-20s\033[0m %s\n" "$$target" "$$desc"; \
+	done
 
 # -- docker compose
-up: ## Start all services
+up: ## start all services
 	docker compose up -d
 
-up-infra: ## Start only db and aistor (for local dev)
+up-infra: ## start only db and aistor (for local dev)
 	docker compose up -d db aistor
 
-down: ## Stop all services
+down: ## stop all services
 	docker compose down
 
-down-v: ## Stop all services and remove volumes
+down-v: ## stop all services and remove volumes
 	docker compose down -v
 
-restart: ## Restart all services
+restart: ## restart all services
 	docker compose restart
 
-build: ## Build all Docker images
+build: ## build all docker images
 	docker compose build
 
-build-server: ## Build server image only
+build-server: ## build server image only
 	docker compose build server
 
-build-app: ## Build app image only
+build-app: ## build app image only
 	docker compose build app
 
-logs: ## Follow logs (usage: make logs s=server)
+logs: ## follow logs (usage: make logs s=server)
 	docker compose logs -f $(s)
 
-ps: ## Show running containers
+ps: ## show running containers
 	docker compose ps
 
+# -- deploy profiles
+deploy-aistor: ## deploy with local aistor storage (no aws s3)
+	STORAGE_PROVIDER=aistor \
+	STORAGE_ENDPOINT=http://aistor:9000 \
+	docker compose up -d db aistor server app
+
+deploy-aws: ## deploy with aws s3 storage (no aistor)
+	STORAGE_PROVIDER=aws \
+	STORAGE_ENDPOINT="" \
+	docker compose up -d db server app
+
 # -- database migrations
-migrate: ## Apply all schemas (files first, then app)
-	@echo "→ Applying schema_files..."
+migrate: ## apply all schemas (files first, then app)
+	@echo "→ applying schema_files..."
 	@$(PSQL) < $(MIGRATIONS_DIR)/schema_files.sql
-	@echo "→ Applying schema_app..."
+	@echo "→ applying schema_app..."
 	@$(PSQL) < $(MIGRATIONS_DIR)/schema_app.sql
-	@echo "✓ Migrations applied"
+	@echo "✓ migrations applied"
 
-migrate-reset: ## Reset all data (keeps schema)
-	@echo "→ Resetting schema_app data..."
+migrate-reset: ## reset all data (keeps schema)
+	@echo "→ resetting schema_app data..."
 	@$(PSQL) < $(MIGRATIONS_DIR)/reset_schema_app.sql
-	@echo "→ Resetting schema_files data..."
+	@echo "→ resetting schema_files data..."
 	@$(PSQL) < $(MIGRATIONS_DIR)/reset_schema_files.sql
-	@echo "✓ Data reset"
+	@echo "✓ data reset"
 
-migrate-drop: ## Drop all schemas completely
-	@echo "→ Dropping schema_app..."
+migrate-drop: ## drop all schemas completely
+	@echo "→ dropping schema_app..."
 	@$(PSQL) < $(MIGRATIONS_DIR)/delete_schema_app.sql
-	@echo "→ Dropping schema_files..."
+	@echo "→ dropping schema_files..."
 	@$(PSQL) < $(MIGRATIONS_DIR)/delete_schema_files.sql
-	@echo "✓ Schemas dropped"
+	@echo "✓ schemas dropped"
 
-migrate-fresh: migrate-drop migrate ## Drop and re-apply all schemas
+migrate-fresh: migrate-drop migrate ## drop and re-apply all schemas
 
 # -- local development
-dev-server: ## Run server locally (requires db + aistor running)
+dev-server: ## run server locally (requires db + aistor running)
 	cd server && cargo run
 
-dev-app: ## Run app locally (requires server running)
+dev-app: ## run app locally (requires server running)
 	cd app && cargo leptos watch
 
-dev: up-infra ## Start infra + run server and app locally
-	@echo "→ Infrastructure ready"
-	@echo "→ Run 'make dev-server' and 'make dev-app' in separate terminals"
+dev: up-infra ## start infra + print next steps
+	@echo "→ infrastructure ready"
+	@echo "→ run 'make dev-server' and 'make dev-app' in separate terminals"
 
 # -- keys
-keygen: ## Generate Ed25519 key pair and print to stdout
-	@echo "→ Generating keys (server must be running on port $(SERVER_PORT))..."
+keygen: ## generate ed25519 key pair and print to stdout
+	@echo "→ generating keys (server must be running on port $(SERVER_PORT))..."
 	@curl -s http://localhost:$(SERVER_PORT)/api/v1/admin/keygen | python3 -m json.tool
 
 # -- cleanup
-clean: ## Remove build artifacts
+clean: ## remove build artifacts
 	cd server && cargo clean
 	cd app && cargo clean
 
-prune: ## Remove unused Docker resources
+prune: ## remove unused docker resources
 	docker system prune -f
