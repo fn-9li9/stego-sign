@@ -1,91 +1,123 @@
-<picture>
-    <source srcset="https://raw.githubusercontent.com/leptos-rs/leptos/main/docs/logos/Leptos_logo_Solid_White.svg" media="(prefers-color-scheme: dark)">
-    <img src="https://raw.githubusercontent.com/leptos-rs/leptos/main/docs/logos/Leptos_logo_RGB.svg" alt="Leptos Logo">
-</picture>
+# stego-app
 
-# Leptos Axum Starter Template
+Frontend SSR/WASM para StegoSign, construido con [Leptos](https://leptos.dev) 0.8 y Axum.
 
-This is a template for use with the [Leptos](https://github.com/leptos-rs/leptos) web framework and the [cargo-leptos](https://github.com/akesson/cargo-leptos) tool using [Axum](https://github.com/tokio-rs/axum).
+## Stack
 
-## Creating your template repo
+- **Leptos 0.8** — framework full-stack Rust con SSR + hydration
+- **Axum** — servidor HTTP para SSR y proxy de API
+- **WASM** — cliente compilado a WebAssembly via `wasm32-unknown-unknown`
+- **Tailwind CSS** — estilos via CDN browser build
+- **gloo-net** — cliente HTTP para llamadas desde el browser
 
-If you don't have `cargo-leptos` installed you can install it with
+## Arquitectura
+
+```
+browser
+  │
+  └─► localhost:3000  (stego-app — Leptos SSR)
+        │
+        └─► /api/*  →  proxy interno  →  localhost:4000  (stego-server)
+```
+
+El browser **nunca habla directamente con el server**. Todas las llamadas a `/api/*`
+pasan por el proxy interno del app, que las reenvía al server en la red interna.
+
+### Variables de entorno clave
+
+| Variable | Uso | Ejemplo |
+|---|---|---|
+| `API_BASE_URL` | SSR → server (solo en el proceso Rust) | `http://localhost:4000` |
+| `PUBLIC_API_BASE_URL` | CSR → proxy del app (inyectado en meta tag) | `http://localhost:3000` |
+| `LEPTOS_SITE_ADDR` | Dirección donde escucha el app | `127.0.0.1:3000` |
+
+## Desarrollo local
+
+### Prerequisitos
 
 ```bash
+rustup target add wasm32-unknown-unknown
 cargo install cargo-leptos --locked
 ```
 
-Then run
-```bash
-cargo leptos new --git https://github.com/leptos-rs/start-axum
-```
-
-to generate a new project template.
+### Setup
 
 ```bash
-cd app
+cp .env.example .env
+# edita .env con tus valores
 ```
 
-to go to your newly created project.
-Feel free to explore the project structure, but the best place to start with your application code is in `src/app.rs`.
-Additionally, Cargo.toml may need updating as new versions of the dependencies are released, especially if things are not working after a `cargo update`.
+Asegúrate de que el server esté corriendo en `localhost:4000`:
 
-## Running your project
+```bash
+# en /server
+cargo run
+```
+
+### Correr el app
 
 ```bash
 cargo leptos watch
 ```
 
-## Installing Additional Tools
+Abre [http://localhost:3000](http://localhost:3000).
 
-By default, `cargo-leptos` uses `nightly` Rust, `cargo-generate`, and `sass`. If you run into any trouble, you may need to install one or more of these tools.
+## Build para producción
 
-1. `rustup toolchain install nightly --allow-downgrade` - make sure you have Rust nightly
-2. `rustup target add wasm32-unknown-unknown` - add the ability to compile Rust to WebAssembly
-3. `cargo install cargo-generate` - install `cargo-generate` binary (should be installed automatically in future)
-4. `npm install -g sass` - install `dart-sass` (should be optional in future
-5. Run `npm install` in end2end subdirectory before test
-
-## Compiling for Release
 ```bash
 cargo leptos build --release
 ```
 
-Will generate your server binary in target/release and your site package in target/site
+El binario queda en `target/release/stego-app` y los assets en `target/site/`.
 
-## Testing Your Project
+## Docker
+
+El app se construye y sirve via Docker. Los ARGs de build son provistos por el
+`docker-compose.yml` del proyecto raíz:
+
+```yaml
+args:
+  API_BASE_URL:        http://server:4000
+  PUBLIC_API_BASE_URL: http://localhost:${APP_PORT}
+```
+
+> `API_BASE_URL` se usa en compile-time solo como fallback. En runtime
+> el valor real viene del `.env` o del compose via variable de entorno.
+
+### Levantar solo el app con Docker Compose
+
 ```bash
-cargo leptos end-to-end
+# desde la raíz del proyecto
+docker compose up -d app
 ```
 
-```bash
-cargo leptos end-to-end --release
+## Estructura
+
+```
+src/
+├── main.rs          # entry point SSR + proxy /api/*
+├── lib.rs           # entry point WASM (hydrate)
+├── app.rs           # shell HTML + router principal
+├── config.rs        # api_base_url() — SSR lee env, CSR lee meta tag
+├── features/
+│   ├── home/        # página principal + stats
+│   ├── sign/        # firma de documentos
+│   ├── verify/      # verificación de integridad
+│   └── documents/   # listado y descarga de documentos
+└── shared/
+    ├── components/  # navbar, footer
+    └── models.rs    # tipos compartidos
 ```
 
-Cargo-leptos uses Playwright as the end-to-end test tool.
-Tests are located in end2end/tests directory.
+## Proxy de API
 
-## Executing a Server on a Remote Machine Without the Toolchain
-After running a `cargo leptos build --release` the minimum files needed are:
+El `main.rs` registra una ruta `/api/*` que reenvía todas las peticiones al server:
 
-1. The server binary located in `target/server/release`
-2. The `site` directory and all files within located in `target/site`
-
-Copy these files to your remote server. The directory structure should be:
-```text
-app
-site/
 ```
-Set the following environment variables (updating for your project as needed):
-```sh
-export LEPTOS_OUTPUT_NAME="app"
-export LEPTOS_SITE_ROOT="site"
-export LEPTOS_SITE_PKG_DIR="pkg"
-export LEPTOS_SITE_ADDR="127.0.0.1:3000"
-export LEPTOS_RELOAD_PORT="3001"
+GET  /api/v1/stats      →  http://server:4000/api/v1/stats
+POST /api/v1/sign       →  http://server:4000/api/v1/sign
+POST /api/v1/verify     →  http://server:4000/api/v1/verify
+GET  /api/v1/documents  →  http://server:4000/api/v1/documents
 ```
-Finally, run the server binary.
 
-## Licensing
-
-This template itself is released under the Unlicense. You should replace the LICENSE for your own application with an appropriate license if you plan to release it publicly.
+Esto elimina la necesidad de CORS y mantiene el server fuera de la red pública.
