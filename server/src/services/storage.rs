@@ -7,9 +7,16 @@ use aws_sdk_s3::{
 use bytes::Bytes;
 use tracing::info;
 
-pub const BUCKET_UPLOADS: &str = "uploads";
-pub const BUCKET_SIGNATURES: &str = "signatures";
-pub const BUCKET_CORRUPTED: &str = "corrupted";
+// -- bucket name helpers usando prefijo
+pub fn bucket_uploads(prefix: &str) -> String {
+    format!("{}-uploads", prefix)
+}
+pub fn bucket_signatures(prefix: &str) -> String {
+    format!("{}-signatures", prefix)
+}
+pub fn bucket_corrupted(prefix: &str) -> String {
+    format!("{}-corrupted", prefix)
+}
 
 pub async fn build_client(env: &Env) -> Client {
     let creds = Credentials::new(
@@ -19,7 +26,6 @@ pub async fn build_client(env: &Env) -> Client {
         None,
         "provider",
     );
-
     match env.storage_provider.as_str() {
         "aws" => {
             let config = aws_config::defaults(BehaviorVersion::latest())
@@ -30,7 +36,6 @@ pub async fn build_client(env: &Env) -> Client {
             Client::new(&config)
         }
         _ => {
-            // aistor / minio local
             let config = aws_config::defaults(BehaviorVersion::latest())
                 .region(Region::new("us-east-1"))
                 .endpoint_url(&env.storage_endpoint)
@@ -48,15 +53,18 @@ pub async fn build_client(env: &Env) -> Client {
 pub async fn ensure_buckets(
     client: &Client,
     db: &sea_orm::DatabaseConnection,
+    prefix: &str,
 ) -> anyhow::Result<()> {
     use sea_orm::ConnectionTrait;
-    for bucket in [BUCKET_UPLOADS, BUCKET_SIGNATURES, BUCKET_CORRUPTED] {
-        match client.head_bucket().bucket(bucket).send().await {
-            Ok(_) => {
-                info!(bucket = %bucket, "bucket already exists");
-            }
+    for bucket in [
+        bucket_uploads(prefix),
+        bucket_signatures(prefix),
+        bucket_corrupted(prefix),
+    ] {
+        match client.head_bucket().bucket(&bucket).send().await {
+            Ok(_) => info!(bucket = %bucket, "bucket already exists"),
             Err(_) => {
-                client.create_bucket().bucket(bucket).send().await?;
+                client.create_bucket().bucket(&bucket).send().await?;
                 info!(bucket = %bucket, "bucket created successfully");
             }
         }
@@ -67,7 +75,7 @@ pub async fn ensure_buckets(
             VALUES ($1, 'us-east-1')
             ON CONFLICT (name) DO NOTHING
             "#,
-            [bucket.into()],
+            [bucket.as_str().into()],
         ))
         .await?;
         info!(bucket = %bucket, "bucket registered in database");
