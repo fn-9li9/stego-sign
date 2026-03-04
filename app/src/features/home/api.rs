@@ -1,4 +1,4 @@
-use crate::shared::config::api_base_url;
+use crate::config::api_base_url;
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
