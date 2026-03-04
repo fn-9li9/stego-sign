@@ -1,4 +1,4 @@
-use crate::shared::config::api_base_url;
+use crate::config::api_base_url;
 use gloo_net::http::Request;
 use serde::Deserialize;
 
