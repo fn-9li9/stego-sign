@@ -7,15 +7,13 @@ mod services;
 
 use aws_sdk_s3::Client as S3Client;
 use axum::Router;
+use config::{Env, cors, db, logger};
 use sea_orm::DatabaseConnection;
+use services::storage;
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 use tracing::info;
 
-use config::{Env, cors, db, logger};
-use services::storage;
-
-// -- shared state available to every handler
 #[derive(Clone)]
 pub struct AppState {
     pub env: Arc<Env>,
@@ -29,22 +27,33 @@ pub struct AppState {
 #[tokio::main]
 async fn main() {
     logger::init();
-
     let env = Env::load();
     info!(host = %env.server_host, port = %env.server_port, "starting stego-server");
 
     // -- database
     let db_conn = db::connect(&env).await.expect("database connection failed");
 
-    // -- minio client + ensure buckets exist
+    // -- run migrations automatically on startup
+    info!("running migrations...");
+    let migrations_dir = std::path::Path::new("migrations");
+    for migration in ["schema_files.sql", "schema_app.sql"] {
+        let path = migrations_dir.join(migration);
+        let sql = std::fs::read_to_string(&path)
+            .unwrap_or_else(|_| panic!("failed to read migration: {}", path.display()));
+        sea_orm::ConnectionTrait::execute_unprepared(&db_conn, &sql)
+            .await
+            .unwrap_or_else(|e| panic!("failed to apply migration {}: {}", migration, e));
+        info!(migration = %migration, "migration applied");
+    }
+    info!("all migrations applied");
+
+    // -- storage client + ensure buckets exist
     let s3_client = storage::build_client(&env).await;
-    // -- self-healing: buckets se crean automáticamente al arrancar
     storage::ensure_buckets(&s3_client, &db_conn, &env.storage_bucket_prefix)
         .await
         .expect("failed to ensure buckets");
 
-    // -- signing keys (in prod: load from vault or env)
-    // -- for now: hardcoded dev keys, replace with real key management
+    // -- signing keys
     let signing_key = Arc::new(env.signing_key.clone());
     let verify_key = Arc::new(env.verify_key.clone());
 
@@ -73,10 +82,8 @@ async fn main() {
 
     let addr = format!("{}:{}", env.server_host, env.server_port);
     info!(address = %addr, "server listening");
-
     let listener = tokio::net::TcpListener::bind(&addr)
         .await
         .expect("failed to bind address");
-
     axum::serve(listener, app).await.expect("server error");
 }

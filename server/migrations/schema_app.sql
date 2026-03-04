@@ -1,6 +1,10 @@
 CREATE SCHEMA IF NOT EXISTS app;
 
-CREATE TYPE app.document_status AS ENUM ('VALID', 'TAMPERED', 'UNREGISTERED', 'INVALID');
+DO $$ BEGIN
+    CREATE TYPE app.document_status AS ENUM ('VALID', 'TAMPERED', 'UNREGISTERED', 'INVALID');
+EXCEPTION
+    WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE TABLE IF NOT EXISTS app.documents (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
