@@ -16,8 +16,16 @@ pub async fn storage_download_handler(
 ) -> impl IntoResponse {
     info!(bucket = %bucket, key = %key, "storage download requested");
 
-    let allowed = ["uploads", "signatures", "corrupted"];
-    if !allowed.contains(&bucket.as_str()) {
+    // resolver buckets dinámicos según prefix
+    let prefix = &state.env.storage_bucket_prefix;
+
+    let allowed = [
+        crate::services::storage::bucket_uploads(prefix),
+        crate::services::storage::bucket_signatures(prefix),
+        crate::services::storage::bucket_corrupted(prefix),
+    ];
+
+    if !allowed.iter().any(|b| b == &bucket) {
         return (
             StatusCode::BAD_REQUEST,
             Json(ApiResponse::<()>::err("invalid bucket")),
@@ -28,6 +36,7 @@ pub async fn storage_download_handler(
     match crate::services::storage::download_storage(&state.storage, &bucket, &key).await {
         Ok((bytes, content_type)) => {
             let filename = key.split('/').last().unwrap_or("file");
+
             (
                 StatusCode::OK,
                 [

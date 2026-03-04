@@ -27,6 +27,10 @@ pub async fn sign_handler(
     let mut author = String::from("anonymous");
     let mut wm_pos = "bottom-right".to_string();
 
+    // buckets dinámicos según prefix de entorno
+    let bucket_uploads = storage::bucket_uploads(&state.env.storage_bucket_prefix);
+    let bucket_signatures = storage::bucket_signatures(&state.env.storage_bucket_prefix);
+
     while let Ok(Some(field)) = multipart.next_field().await {
         match field.name() {
             Some("file") => {
@@ -138,9 +142,10 @@ pub async fn sign_handler(
 
     // -- 6. upload original sin modificar
     let upload_key = format!("{}/{}", document_id, filename);
+
     if let Err(e) = storage::upload(
         &state.storage,
-        storage::BUCKET_UPLOADS,
+        &bucket_uploads,
         &upload_key,
         bytes.clone(),
         "application/octet-stream",
@@ -157,9 +162,10 @@ pub async fn sign_handler(
 
     // -- 7. upload firmado (watermark + stego)
     let signed_key = format!("{}/signed_{}", document_id, filename);
+
     if let Err(e) = storage::upload(
         &state.storage,
-        storage::BUCKET_SIGNATURES,
+        &bucket_signatures,
         &signed_key,
         signed_bytes,
         "application/octet-stream",
@@ -178,7 +184,7 @@ pub async fn sign_handler(
     let object_id = match obj_repo::register(
         &state.db,
         obj_repo::CreateObject {
-            bucket_name: storage::BUCKET_UPLOADS.to_string(),
+            bucket_name: bucket_uploads.clone(),
             object_key: upload_key.clone(),
             filename: filename.clone(),
             content_type: "application/octet-stream".to_string(),
@@ -201,7 +207,7 @@ pub async fn sign_handler(
     let _ = obj_repo::register(
         &state.db,
         obj_repo::CreateObject {
-            bucket_name: storage::BUCKET_SIGNATURES.to_string(),
+            bucket_name: bucket_signatures.clone(),
             object_key: signed_key.clone(),
             filename: format!("signed_{}", filename),
             content_type: "application/octet-stream".to_string(),

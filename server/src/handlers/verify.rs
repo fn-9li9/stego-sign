@@ -34,7 +34,8 @@ pub async fn verify_handler(
 
     info!(filename = %filename, "verify request received");
 
-    // -- 1. strip payload antes de hashear
+    // -- 1. bucket dinámico según prefix
+    let bucket_corrupted = storage::bucket_corrupted(&state.env.storage_bucket_prefix);
 
     // -- 2. extrae payload esteganográfico directamente
     // --    NO subimos nada aquí — solo subimos si es tampered
@@ -49,19 +50,22 @@ pub async fn verify_handler(
 
             // -- archivo inválido: sube a corrupted para referencia
             let corrupted_key = format!("corrupted/{}/{}", uuid::Uuid::new_v4(), filename);
+
             let _ = storage::upload(
                 &state.storage,
-                storage::BUCKET_CORRUPTED,
+                &bucket_corrupted,
                 &corrupted_key,
                 bytes.clone(),
                 "application/octet-stream",
             )
             .await;
+
             let size_bytes = bytes.len() as i64;
+
             let _ = obj_repo::register(
                 &state.db,
                 obj_repo::CreateObject {
-                    bucket_name: storage::BUCKET_CORRUPTED.to_string(),
+                    bucket_name: bucket_corrupted.clone(),
                     object_key: corrupted_key.clone(),
                     filename: filename.clone(),
                     content_type: "application/octet-stream".to_string(),
@@ -192,18 +196,20 @@ pub async fn verify_handler(
         }
 
         let key = format!("corrupted/{}/{}", uuid::Uuid::new_v4(), filename);
+
         let _ = storage::upload(
             &state.storage,
-            storage::BUCKET_CORRUPTED,
+            &bucket_corrupted,
             &key,
             bytes.clone(),
             "application/octet-stream",
         )
         .await;
+
         let _ = obj_repo::register(
             &state.db,
             obj_repo::CreateObject {
-                bucket_name: storage::BUCKET_CORRUPTED.to_string(),
+                bucket_name: bucket_corrupted.clone(),
                 object_key: key.clone(),
                 filename: format!("corrupted_{}", filename),
                 content_type: "application/octet-stream".to_string(),

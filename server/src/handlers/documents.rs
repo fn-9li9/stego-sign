@@ -100,17 +100,21 @@ pub async fn download_handler(State(state): State<AppState>, Path(id): Path<Uuid
     };
 
     // -- download from minio signatures bucket
-    let file_bytes =
-        match storage::download(&state.storage, storage::BUCKET_SIGNATURES, &signed_key).await {
-            Ok(b) => b,
-            Err(e) => {
-                return ApiError {
-                    status: StatusCode::INTERNAL_SERVER_ERROR,
-                    message: format!("failed to retrieve file: {}", e),
-                }
-                .into_response();
+
+    // bucket dinámico según prefix
+    let bucket_signatures = storage::bucket_signatures(&state.env.storage_bucket_prefix);
+
+    let file_bytes = match storage::download(&state.storage, &bucket_signatures, &signed_key).await
+    {
+        Ok(b) => b,
+        Err(e) => {
+            return ApiError {
+                status: StatusCode::INTERNAL_SERVER_ERROR,
+                message: format!("failed to retrieve file: {}", e),
             }
-        };
+            .into_response();
+        }
+    };
 
     // -- build filename for download: signed_{original}
     let download_name = format!("signed_{}", doc.filename);
