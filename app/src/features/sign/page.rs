@@ -21,12 +21,14 @@ enum SignState {
 pub fn SignPage() -> impl IntoView {
     let file = RwSignal::new(None::<web_sys::File>);
     let author = RwSignal::new(String::new());
+    let wm_position = RwSignal::new("bottom-right".to_string());
     let state = RwSignal::new(SignState::Idle);
     let show_modal = RwSignal::new(false);
 
     let on_reset = move || {
         file.set(None);
         author.set(String::new());
+        wm_position.set("bottom-right".to_string());
         state.set(SignState::Idle);
     };
 
@@ -45,9 +47,10 @@ pub fn SignPage() -> impl IntoView {
             state.set(SignState::Error("Author name is required".to_string()));
             return;
         }
+        let pos = wm_position.get();
         state.set(SignState::Loading);
         spawn_local(async move {
-            match sign_document(f, auth).await {
+            match sign_document(f, auth, pos).await {
                 Ok(data) => state.set(SignState::Success(data)),
                 Err(e) => state.set(SignState::Error(e)),
             }
@@ -110,6 +113,36 @@ pub fn SignPage() -> impl IntoView {
                                     />
                                 </div>
                             </div>
+
+                            {move || {
+                                let is_pdf = file.get()
+                                    .map(|f| f.name().to_lowercase().ends_with(".pdf"))
+                                    .unwrap_or(false);
+
+                                if is_pdf {
+                                    view! {
+                                        <div>
+                                            <label class="block text-sm font-semibold text-navy mb-2">
+                                                "QR Watermark Position"
+                                            </label>
+                                            <select
+                                                class="w-full px-4 py-3 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-300 focus:border-primary-500 transition-all duration-200 bg-white"
+                                                on:change=move |ev| wm_position.set(event_target_value(&ev))
+                                                prop:value=move || wm_position.get()
+                                            >
+                                                <option value="bottom-right">"Bottom Right"</option>
+                                                <option value="bottom-left">"Bottom Left"</option>
+                                                <option value="bottom-center">"Bottom Center"</option>
+                                                <option value="top-right">"Top Right"</option>
+                                                <option value="top-left">"Top Left"</option>
+                                                <option value="top-center">"Top Center"</option>
+                                            </select>
+                                        </div>
+                                    }.into_any()
+                                } else {
+                                    view! { <div></div> }.into_any()
+                                }
+                            }}
 
                             {move || {
                                 if let SignState::Error(e) = state.get() {
