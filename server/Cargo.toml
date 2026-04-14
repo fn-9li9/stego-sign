@@ -7,7 +7,7 @@ edition = "2024"
 qrcode = "0.14"
 image = { version = "0.25", default-features = false, features = ["png"] }
 lopdf = "0.39.0"
-rand = "0.10.0"
+rand = "0.10.1"
 
 # web
 axum = { version = "0.8", features = ["multipart"] }
